@@ -30,12 +30,14 @@ Under the input box, show a mode pill/toggle:
 - `Plan mode` (toggle on/off)
 - When ON, it is visually “active” and persists for the session (optionally persisted per-repo).
 - Placement: directly underneath the input, aligned left, next to other small controls (e.g., “Auto-run”, “Verbose”, etc. if added later).
+- TUI copy (when ON): `Plan mode on (shift+tab to toggle)`
 
 #### C) Keyboard toggle
 
 `Shift+Tab` cycles modes:
 
 - `Normal → Plan → Auto → Normal` (or just `Normal ↔ Plan` if only shipping two initially).
+- `Shift+Tab` is a mode toggle only; it must **not** submit the current input.
 - This is critical for “Claude Code muscle memory”.
 
 ## 3) Mode Semantics
@@ -67,7 +69,7 @@ Responds and executes as usual.
 
 ## 5) Plan Output Format
 
-When entering Plan Mode (via `/plan`, toggle, or `Shift+Tab`), Codex prints:
+When starting Plan Mode (via `/plan`, or when the user sends their next message while Plan Mode is enabled), Codex prints:
 
 - **Goal** (1–2 lines)
 - **Plan** (numbered steps)
@@ -89,7 +91,12 @@ Plan
 3. ...
 
 Decision points
-1) <single-select or multi-select question>
+1) **Label** (single-select|multi-select): <question prompt>
+   1. <option title>
+      <option description (optional)>
+   2. ...
+   5. (None) Type your answer
+      Next
 2) ...
 
 Checkpoints
@@ -184,7 +191,7 @@ If Codex hits a fork mid-run (tests failing, missing env, ambiguous target), it:
 
 When Plan Mode is enabled:
 
-- Under input: Plan mode toggle ON
+- Under input: `Plan mode on (shift+tab to toggle)`
 - In the transcript header (optional): show a small badge `PLAN`
 
 ### 8.2 `/mode` command (optional but useful)
@@ -208,7 +215,7 @@ Plan Mode is “done” when:
   - `/plan`
   - the Plan mode toggle under input
   - `Shift+Tab` cycling
-- On entry, Codex:
+- When starting Plan Mode (`/plan`, or the first user message while Plan Mode is enabled), Codex:
   - prints a plan
   - asks ≤5 structured questions
   - starts execution automatically after answers

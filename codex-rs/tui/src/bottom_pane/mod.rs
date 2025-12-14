@@ -29,6 +29,7 @@ pub mod custom_prompt_view;
 mod file_search_popup;
 mod footer;
 mod list_selection_view;
+mod plan_questions;
 mod prompt_args;
 mod skill_popup;
 pub(crate) use list_selection_view::SelectionViewParams;
@@ -56,6 +57,8 @@ use codex_protocol::custom_prompts::CustomPrompt;
 use crate::status_indicator_widget::StatusIndicatorWidget;
 pub(crate) use list_selection_view::SelectionAction;
 pub(crate) use list_selection_view::SelectionItem;
+pub(crate) use plan_questions::PlanQuestionsView;
+pub(crate) use plan_questions::parse_plan_question_round;
 
 /// Pane displayed in the lower half of the chat UI.
 pub(crate) struct BottomPane {

@@ -89,10 +89,12 @@ use crate::bottom_pane::BottomPane;
 use crate::bottom_pane::BottomPaneParams;
 use crate::bottom_pane::CancellationEvent;
 use crate::bottom_pane::InputResult;
+use crate::bottom_pane::PlanQuestionsView;
 use crate::bottom_pane::SelectionAction;
 use crate::bottom_pane::SelectionItem;
 use crate::bottom_pane::SelectionViewParams;
 use crate::bottom_pane::custom_prompt_view::CustomPromptView;
+use crate::bottom_pane::parse_plan_question_round;
 use crate::bottom_pane::popup_consts::standard_popup_hint_line;
 use crate::clipboard_paste::paste_image_to_temp_png;
 use crate::diff_render::display_path_for;
@@ -152,6 +154,12 @@ Print the Plan Mode entry output now:
 - Checkpoints
 - Rollback
 
+Decision points formatting (required):
+- Use an exact section header line: "Decision points"
+- Each question uses: `N) **Label** (single-select|multi-select): Prompt`
+- Each option uses an indented numbered line: `  N. Option title`
+- If an option needs a description, put it on the next line indented by 5 spaces.
+
 Ask only structured single-/multi-select questions. Each select question has 2–5 options total; the last option is always "(None) Type your answer".
 If the goal is ambiguous or missing, make the first decision point ask for it.
 Do not execute yet; wait for answers.
@@ -159,6 +167,12 @@ Do not execute yet; wait for answers.
 
 const PLAN_MODE_REPLAN_PROMPT: &str = r#"<user_instructions>
 Re-plan from the current context. Keep completed steps as completed unless the user asked to rewind.
+
+Decision points formatting (required):
+- Use an exact section header line: "Decision points"
+- Each question uses: `N) **Label** (single-select|multi-select): Prompt`
+- Each option uses an indented numbered line: `  N. Option title`
+- If an option needs a description, put it on the next line indented by 5 spaces.
 
 Print an updated Goal/Plan/Decision points/Checkpoints/Rollback, then wait for answers.
 </user_instructions>"#;
@@ -542,6 +556,26 @@ impl ChatWidget {
         self.request_redraw();
     }
 
+    fn maybe_show_plan_questions(&mut self, last_agent_message: Option<&str>) -> bool {
+        if self.bottom_pane.interaction_mode() != InteractionMode::Plan {
+            return false;
+        }
+
+        let Some(text) = last_agent_message else {
+            return false;
+        };
+
+        let Some(round) = parse_plan_question_round(text) else {
+            return false;
+        };
+
+        self.bottom_pane.show_view(Box::new(PlanQuestionsView::new(
+            round,
+            self.app_event_tx.clone(),
+        )));
+        true
+    }
+
     fn on_task_complete(&mut self, last_agent_message: Option<String>) {
         // If a stream is currently active, finalize it.
         self.flush_answer_stream_with_separator();
@@ -552,8 +586,12 @@ impl ChatWidget {
         self.last_unified_wait = None;
         self.request_redraw();
 
-        // If there is a queued user message, send exactly one now to begin the next turn.
-        self.maybe_send_next_queued_input();
+        // If Plan mode produced decision points, collect answers before sending any queued input.
+        let showed_plan_questions = self.maybe_show_plan_questions(last_agent_message.as_deref());
+        if !showed_plan_questions {
+            // If there is a queued user message, send exactly one now to begin the next turn.
+            self.maybe_send_next_queued_input();
+        }
         // Emit a notification when the turn completes (suppressed if focused).
         self.notify(Notification::AgentTurnComplete {
             response: last_agent_message.unwrap_or_default(),

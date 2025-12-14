@@ -3836,9 +3836,8 @@ mod tests {
 
     #[test]
     fn burst_paste_fast_small_buffers_and_flushes_on_stop() {
-        use crossterm::event::KeyCode;
-        use crossterm::event::KeyEvent;
-        use crossterm::event::KeyModifiers;
+        use std::time::Duration;
+        use std::time::Instant;
 
         let (tx, _rx) = unbounded_channel::<AppEvent>();
         let sender = AppEventSender::new(tx);
@@ -3851,9 +3850,16 @@ mod tests {
         );
 
         let count = 32;
+        let mut now = Instant::now();
         for _ in 0..count {
-            let _ =
-                composer.handle_key_event(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE));
+            match composer.paste_burst.on_plain_char('a', now) {
+                CharDecision::RetainFirstChar => {}
+                CharDecision::BeginBuffer { .. }
+                | CharDecision::BeginBufferFromPending
+                | CharDecision::BufferAppend => {
+                    composer.paste_burst.append_char_to_buffer('a', now)
+                }
+            }
             assert!(
                 composer.is_in_paste_burst(),
                 "expected active paste burst during fast typing"
@@ -3862,14 +3868,15 @@ mod tests {
                 composer.textarea.text().is_empty(),
                 "text should not appear during burst"
             );
+            now += Duration::from_millis(1);
         }
 
         assert!(
             composer.textarea.text().is_empty(),
             "text should remain empty until flush"
         );
-        std::thread::sleep(ChatComposer::recommended_paste_flush_delay());
-        let flushed = composer.flush_paste_burst_if_due();
+        let flushed =
+            composer.handle_paste_burst_flush(now + PasteBurst::recommended_flush_delay());
         assert!(flushed, "expected buffered text to flush after stop");
         assert_eq!(composer.textarea.text(), "a".repeat(count));
         assert!(
@@ -3880,9 +3887,8 @@ mod tests {
 
     #[test]
     fn burst_paste_fast_large_inserts_placeholder_on_flush() {
-        use crossterm::event::KeyCode;
-        use crossterm::event::KeyEvent;
-        use crossterm::event::KeyModifiers;
+        use std::time::Duration;
+        use std::time::Instant;
 
         let (tx, _rx) = unbounded_channel::<AppEvent>();
         let sender = AppEventSender::new(tx);
@@ -3895,15 +3901,23 @@ mod tests {
         );
 
         let count = LARGE_PASTE_CHAR_THRESHOLD + 1; // > threshold to trigger placeholder
+        let mut now = Instant::now();
         for _ in 0..count {
-            let _ =
-                composer.handle_key_event(KeyEvent::new(KeyCode::Char('x'), KeyModifiers::NONE));
+            match composer.paste_burst.on_plain_char('x', now) {
+                CharDecision::RetainFirstChar => {}
+                CharDecision::BeginBuffer { .. }
+                | CharDecision::BeginBufferFromPending
+                | CharDecision::BufferAppend => {
+                    composer.paste_burst.append_char_to_buffer('x', now)
+                }
+            }
+            now += Duration::from_millis(1);
         }
 
         // Nothing should appear until we stop and flush
         assert!(composer.textarea.text().is_empty());
-        std::thread::sleep(ChatComposer::recommended_paste_flush_delay());
-        let flushed = composer.flush_paste_burst_if_due();
+        let flushed =
+            composer.handle_paste_burst_flush(now + PasteBurst::recommended_flush_delay());
         assert!(flushed, "expected flush after stopping fast input");
 
         let expected_placeholder = format!("[Pasted Content {count} chars]");

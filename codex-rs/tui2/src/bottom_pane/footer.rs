@@ -87,6 +87,10 @@ fn footer_lines(props: FooterProps) -> Vec<Line<'static>> {
             is_task_running: props.is_task_running,
         })],
         FooterMode::ShortcutSummary => {
+            if props.interaction_mode == InteractionMode::Plan {
+                return vec![plan_mode_hint_line()];
+            }
+
             let mut line = Line::from(vec![
                 key_hint::plain(KeyCode::Char('?')).into(),
                 " for shortcuts".dim(),
@@ -116,6 +120,10 @@ fn footer_lines(props: FooterProps) -> Vec<Line<'static>> {
         }
         FooterMode::EscHint => vec![esc_hint_line(props.esc_backtrack_hint)],
         FooterMode::ContextOnly => {
+            if props.interaction_mode == InteractionMode::Plan {
+                return vec![plan_mode_hint_line()];
+            }
+
             let mut line = Line::from(vec![mode_badge(props.interaction_mode)]);
             line.push_span(" · ".dim());
             let context = context_window_line(
@@ -126,6 +134,13 @@ fn footer_lines(props: FooterProps) -> Vec<Line<'static>> {
             vec![line]
         }
     }
+}
+
+fn plan_mode_hint_line() -> Line<'static> {
+    Line::from(vec![
+        "Plan mode on".cyan().bold(),
+        " (shift+tab to toggle)".dim(),
+    ])
 }
 
 fn mode_badge(mode: InteractionMode) -> Span<'static> {
@@ -433,6 +448,7 @@ const SHORTCUTS: &[ShortcutDescriptor] = &[
 mod tests {
     use super::*;
     use insta::assert_snapshot;
+    use pretty_assertions::assert_eq;
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
 
@@ -553,5 +569,27 @@ mod tests {
                 context_window_used_tokens: Some(123_456),
             },
         );
+    }
+
+    #[test]
+    fn plan_mode_footer_text() {
+        let props = FooterProps {
+            mode: FooterMode::ShortcutSummary,
+            esc_backtrack_hint: false,
+            use_shift_enter_hint: false,
+            is_task_running: false,
+            interaction_mode: InteractionMode::Plan,
+            context_window_percent: None,
+            context_window_used_tokens: None,
+        };
+        let lines = footer_lines(props);
+        assert_eq!(lines.len(), 1);
+
+        let text: String = lines[0]
+            .spans
+            .iter()
+            .map(|span| span.content.as_ref())
+            .collect();
+        assert_eq!(text, "Plan mode on (shift+tab to toggle)");
     }
 }
