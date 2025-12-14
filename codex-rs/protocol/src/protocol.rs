@@ -139,6 +139,10 @@ pub enum Op {
         /// Updated reasoning summary preference (honored only for reasoning-capable models).
         #[serde(skip_serializing_if = "Option::is_none")]
         summary: Option<ReasoningSummaryConfig>,
+
+        /// Updated interaction mode (normal/plan/auto).
+        #[serde(skip_serializing_if = "Option::is_none")]
+        interaction_mode: Option<InteractionMode>,
     },
 
     /// Approve a command execution
@@ -253,6 +257,30 @@ pub enum AskForApproval {
     /// Never ask the user to approve commands. Failures are immediately returned
     /// to the model, and never escalated to the user for approval.
     Never,
+}
+
+/// Controls how Codex structures the interaction loop for user requests.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Default,
+    PartialEq,
+    Eq,
+    Hash,
+    Serialize,
+    Deserialize,
+    Display,
+    JsonSchema,
+    TS,
+)]
+#[serde(rename_all = "kebab-case")]
+#[strum(serialize_all = "kebab-case")]
+pub enum InteractionMode {
+    #[default]
+    Normal,
+    Plan,
+    Auto,
 }
 
 /// Determines execution restrictions for model shell commands.

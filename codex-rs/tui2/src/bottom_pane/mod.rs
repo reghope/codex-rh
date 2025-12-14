@@ -9,6 +9,7 @@ use crate::render::renderable::RenderableItem;
 use crate::tui::FrameRequester;
 use bottom_pane_view::BottomPaneView;
 use codex_core::features::Features;
+use codex_core::protocol::InteractionMode;
 use codex_core::skills::model::SkillMetadata;
 use codex_file_search::FileMatch;
 use crossterm::event::KeyCode;
@@ -133,6 +134,19 @@ impl BottomPane {
 
     pub fn set_skills(&mut self, skills: Option<Vec<SkillMetadata>>) {
         self.composer.set_skill_mentions(skills);
+        self.request_redraw();
+    }
+
+    pub(crate) fn interaction_mode(&self) -> InteractionMode {
+        self.composer.interaction_mode()
+    }
+
+    pub(crate) fn set_interaction_mode(&mut self, mode: InteractionMode) {
+        if self.composer.interaction_mode() == mode {
+            return;
+        }
+
+        self.composer.set_interaction_mode(mode);
         self.request_redraw();
     }
 

@@ -668,6 +668,11 @@ pub(crate) fn new_session_info(
             ]),
             Line::from(vec![
                 "  ".into(),
+                "/plan".into(),
+                " - enter Plan Mode".dim(),
+            ]),
+            Line::from(vec![
+                "  ".into(),
                 "/review".into(),
                 " - review any changes and find issues".dim(),
             ]),

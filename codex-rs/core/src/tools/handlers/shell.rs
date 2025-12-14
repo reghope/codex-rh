@@ -330,22 +330,24 @@ mod tests {
         };
         assert_safe(&zsh_shell, "ls -la");
 
-        if let Some(path) = try_find_powershell_executable_blocking() {
-            let powershell = Shell {
-                shell_type: ShellType::PowerShell,
-                shell_path: path.to_path_buf(),
-                shell_snapshot: None,
-            };
-            assert_safe(&powershell, "ls -Name");
-        }
+        if cfg!(windows) {
+            if let Some(path) = try_find_powershell_executable_blocking() {
+                let powershell = Shell {
+                    shell_type: ShellType::PowerShell,
+                    shell_path: path.to_path_buf(),
+                    shell_snapshot: None,
+                };
+                assert_safe(&powershell, "ls -Name");
+            }
 
-        if let Some(path) = try_find_pwsh_executable_blocking() {
-            let pwsh = Shell {
-                shell_type: ShellType::PowerShell,
-                shell_path: path.to_path_buf(),
-                shell_snapshot: None,
-            };
-            assert_safe(&pwsh, "ls -Name");
+            if let Some(path) = try_find_pwsh_executable_blocking() {
+                let pwsh = Shell {
+                    shell_type: ShellType::PowerShell,
+                    shell_path: path.to_path_buf(),
+                    shell_snapshot: None,
+                };
+                assert_safe(&pwsh, "ls -Name");
+            }
         }
     }
 

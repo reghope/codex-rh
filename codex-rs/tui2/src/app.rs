@@ -827,6 +827,7 @@ impl App {
                                         model: None,
                                         effort: None,
                                         summary: None,
+                                        interaction_mode: None,
                                     },
                                 ));
                                 self.app_event_tx

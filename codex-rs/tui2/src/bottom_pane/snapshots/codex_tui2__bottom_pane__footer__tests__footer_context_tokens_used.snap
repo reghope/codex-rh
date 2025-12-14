@@ -2,4 +2,4 @@
 source: tui2/src/bottom_pane/footer.rs
 expression: terminal.backend()
 ---
-"  123K used · ? for shortcuts                                                   "
+"  ? for shortcuts · [plan] · 123K used                                          "

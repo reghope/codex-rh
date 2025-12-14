@@ -2680,6 +2680,7 @@ impl CodexMessageProcessor {
                     model: params.model,
                     effort: params.effort.map(Some),
                     summary: params.summary,
+                    interaction_mode: None,
                 })
                 .await;
         }

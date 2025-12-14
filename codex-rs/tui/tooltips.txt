@@ -3,6 +3,7 @@ Start a fresh idea with /new; the previous session stays available in history.
 If a turn went sideways, /undo asks Codex to revert the last changes.
 Use /feedback to send logs to the maintainers when something looks off.
 Switch models or reasoning effort quickly with /model.
+Toggle Plan mode with Shift+Tab (or /plan).
 You can run any shell commands from codex using `!` (e.g. `!ls`)
 Type / to open the command popup; Tab autocompletes slash commands and saved prompts.
 You can define your own `/` commands with custom prompts. More info here: https://developers.openai.com/codex/guides/slash-commands#create-your-own-slash-commands-with-custom-prompts

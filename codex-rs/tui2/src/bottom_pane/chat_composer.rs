@@ -55,6 +55,7 @@ use crate::clipboard_paste::normalize_pasted_path;
 use crate::clipboard_paste::pasted_image_format;
 use crate::history_cell;
 use crate::ui_consts::LIVE_PREFIX_COLS;
+use codex_core::protocol::InteractionMode;
 use codex_core::skills::model::SkillMetadata;
 use codex_file_search::FileMatch;
 use std::cell::RefCell;
@@ -116,6 +117,7 @@ pub(crate) struct ChatComposer {
     custom_prompts: Vec<CustomPrompt>,
     footer_mode: FooterMode,
     footer_hint_override: Option<Vec<(String, String)>>,
+    interaction_mode: InteractionMode,
     context_window_percent: Option<i64>,
     context_window_used_tokens: Option<i64>,
     skills: Option<Vec<SkillMetadata>>,
@@ -164,6 +166,7 @@ impl ChatComposer {
             custom_prompts: Vec::new(),
             footer_mode: FooterMode::ShortcutSummary,
             footer_hint_override: None,
+            interaction_mode: InteractionMode::Normal,
             context_window_percent: None,
             context_window_used_tokens: None,
             skills: None,
@@ -1529,6 +1532,7 @@ impl ChatComposer {
             esc_backtrack_hint: self.esc_backtrack_hint,
             use_shift_enter_hint: self.use_shift_enter_hint,
             is_task_running: self.is_task_running,
+            interaction_mode: self.interaction_mode,
             context_window_percent: self.context_window_percent,
             context_window_used_tokens: self.context_window_used_tokens,
         }
@@ -1759,6 +1763,14 @@ impl ChatComposer {
 
     pub fn set_task_running(&mut self, running: bool) {
         self.is_task_running = running;
+    }
+
+    pub(crate) fn interaction_mode(&self) -> InteractionMode {
+        self.interaction_mode
+    }
+
+    pub(crate) fn set_interaction_mode(&mut self, mode: InteractionMode) {
+        self.interaction_mode = mode;
     }
 
     pub(crate) fn set_context_window(&mut self, percent: Option<i64>, used_tokens: Option<i64>) {

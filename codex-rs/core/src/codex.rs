@@ -98,6 +98,7 @@ use crate::protocol::DeprecationNoticeEvent;
 use crate::protocol::Event;
 use crate::protocol::EventMsg;
 use crate::protocol::ExecApprovalRequestEvent;
+use crate::protocol::InteractionMode;
 use crate::protocol::Op;
 use crate::protocol::RateLimitSnapshot;
 use crate::protocol::ReasoningContentDeltaEvent;
@@ -256,6 +257,7 @@ impl Codex {
             model: model.clone(),
             model_reasoning_effort: config.model_reasoning_effort,
             model_reasoning_summary: config.model_reasoning_summary,
+            interaction_mode: InteractionMode::Normal,
             developer_instructions: config.developer_instructions.clone(),
             user_instructions,
             base_instructions: config.base_instructions.clone(),
@@ -363,6 +365,7 @@ pub(crate) struct TurnContext {
     pub(crate) user_instructions: Option<String>,
     pub(crate) approval_policy: AskForApproval,
     pub(crate) sandbox_policy: SandboxPolicy,
+    pub(crate) interaction_mode: InteractionMode,
     pub(crate) shell_environment_policy: ShellEnvironmentPolicy,
     pub(crate) tools_config: ToolsConfig,
     pub(crate) final_output_json_schema: Option<Value>,
@@ -396,6 +399,7 @@ pub(crate) struct SessionConfiguration {
 
     model_reasoning_effort: Option<ReasoningEffortConfig>,
     model_reasoning_summary: ReasoningSummaryConfig,
+    interaction_mode: InteractionMode,
 
     /// Developer instructions that supplement the base instructions.
     developer_instructions: Option<String>,
@@ -444,6 +448,9 @@ impl SessionConfiguration {
         if let Some(summary) = updates.reasoning_summary {
             next_configuration.model_reasoning_summary = summary;
         }
+        if let Some(interaction_mode) = updates.interaction_mode {
+            next_configuration.interaction_mode = interaction_mode;
+        }
         if let Some(approval_policy) = updates.approval_policy {
             next_configuration.approval_policy = approval_policy;
         }
@@ -465,6 +472,7 @@ pub(crate) struct SessionSettingsUpdate {
     pub(crate) model: Option<String>,
     pub(crate) reasoning_effort: Option<Option<ReasoningEffortConfig>>,
     pub(crate) reasoning_summary: Option<ReasoningSummaryConfig>,
+    pub(crate) interaction_mode: Option<InteractionMode>,
     pub(crate) final_output_json_schema: Option<Option<Value>>,
 }
 
@@ -524,6 +532,7 @@ impl Session {
             user_instructions: session_configuration.user_instructions.clone(),
             approval_policy: session_configuration.approval_policy,
             sandbox_policy: session_configuration.sandbox_policy.clone(),
+            interaction_mode: session_configuration.interaction_mode,
             shell_environment_policy: per_turn_config.shell_environment_policy.clone(),
             tools_config,
             final_output_json_schema: None,
@@ -1547,6 +1556,7 @@ async fn submission_loop(sess: Arc<Session>, config: Arc<Config>, rx_sub: Receiv
                 model,
                 effort,
                 summary,
+                interaction_mode,
             } => {
                 handlers::override_turn_context(
                     &sess,
@@ -1557,6 +1567,7 @@ async fn submission_loop(sess: Arc<Session>, config: Arc<Config>, rx_sub: Receiv
                         model,
                         reasoning_effort: effort,
                         reasoning_summary: summary,
+                        interaction_mode,
                         ..Default::default()
                     },
                 )
@@ -1690,6 +1701,7 @@ mod handlers {
                     reasoning_effort: Some(effort),
                     reasoning_summary: Some(summary),
                     final_output_json_schema: Some(final_output_json_schema),
+                    ..Default::default()
                 },
             ),
             Op::UserInput { items } => (items, SessionSettingsUpdate::default()),
@@ -2036,6 +2048,7 @@ async fn spawn_review_thread(
         compact_prompt: parent_turn_context.compact_prompt.clone(),
         approval_policy: parent_turn_context.approval_policy,
         sandbox_policy: parent_turn_context.sandbox_policy.clone(),
+        interaction_mode: InteractionMode::Normal,
         shell_environment_policy: parent_turn_context.shell_environment_policy.clone(),
         cwd: parent_turn_context.cwd.clone(),
         final_output_json_schema: None,
@@ -2157,6 +2170,8 @@ pub(crate) async fn run_task(
                 .await;
             sess.clone_history().await.get_history_for_prompt()
         };
+        let turn_input =
+            crate::plan_mode::inject_developer_message(turn_input, turn_context.interaction_mode);
 
         let turn_input_messages = turn_input
             .iter()
@@ -2713,6 +2728,7 @@ mod tests {
             model,
             model_reasoning_effort: config.model_reasoning_effort,
             model_reasoning_summary: config.model_reasoning_summary,
+            interaction_mode: InteractionMode::Normal,
             developer_instructions: config.developer_instructions.clone(),
             user_instructions: config.user_instructions.clone(),
             base_instructions: config.base_instructions.clone(),
@@ -2785,6 +2801,7 @@ mod tests {
             model,
             model_reasoning_effort: config.model_reasoning_effort,
             model_reasoning_summary: config.model_reasoning_summary,
+            interaction_mode: InteractionMode::Normal,
             developer_instructions: config.developer_instructions.clone(),
             user_instructions: config.user_instructions.clone(),
             base_instructions: config.base_instructions.clone(),
@@ -2989,6 +3006,7 @@ mod tests {
             model,
             model_reasoning_effort: config.model_reasoning_effort,
             model_reasoning_summary: config.model_reasoning_summary,
+            interaction_mode: InteractionMode::Normal,
             developer_instructions: config.developer_instructions.clone(),
             user_instructions: config.user_instructions.clone(),
             base_instructions: config.base_instructions.clone(),
@@ -3079,6 +3097,7 @@ mod tests {
             model,
             model_reasoning_effort: config.model_reasoning_effort,
             model_reasoning_summary: config.model_reasoning_summary,
+            interaction_mode: InteractionMode::Normal,
             developer_instructions: config.developer_instructions.clone(),
             user_instructions: config.user_instructions.clone(),
             base_instructions: config.base_instructions.clone(),

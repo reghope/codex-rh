@@ -32,6 +32,7 @@ use codex_core::protocol::ExecCommandBeginEvent;
 use codex_core::protocol::ExecCommandEndEvent;
 use codex_core::protocol::ExecCommandSource;
 use codex_core::protocol::ExitedReviewModeEvent;
+use codex_core::protocol::InteractionMode;
 use codex_core::protocol::ListCustomPromptsResponseEvent;
 use codex_core::protocol::McpListToolsResponseEvent;
 use codex_core::protocol::McpStartupCompleteEvent;
@@ -141,6 +142,26 @@ use strum::IntoEnumIterator;
 
 const USER_SHELL_COMMAND_HELP_TITLE: &str = "Prefix a command with ! to run it locally";
 const USER_SHELL_COMMAND_HELP_HINT: &str = "Example: !ls";
+const PLAN_MODE_ENTRY_PROMPT: &str = r#"<user_instructions>
+Plan Mode entry requested.
+
+Print the Plan Mode entry output now:
+- Goal (1–2 lines)
+- Plan (numbered steps)
+- Decision points (round 1 of up to 5 rounds; 1–5 questions)
+- Checkpoints
+- Rollback
+
+Ask only structured single-/multi-select questions. Each select question has 2–5 options total; the last option is always "(None) Type your answer".
+If the goal is ambiguous or missing, make the first decision point ask for it.
+Do not execute yet; wait for answers.
+</user_instructions>"#;
+
+const PLAN_MODE_REPLAN_PROMPT: &str = r#"<user_instructions>
+Re-plan from the current context. Keep completed steps as completed unless the user asked to rewind.
+
+Print an updated Goal/Plan/Decision points/Checkpoints/Rollback, then wait for answers.
+</user_instructions>"#;
 // Track information about an in-flight exec command.
 struct RunningCommand {
     command: Vec<String>,
@@ -1423,6 +1444,11 @@ impl ChatWidget {
     }
 
     pub(crate) fn handle_key_event(&mut self, key_event: KeyEvent) {
+        if is_shift_tab(&key_event) {
+            self.cycle_interaction_mode();
+            return;
+        }
+
         match key_event {
             KeyEvent {
                 code: KeyCode::Char(c),
@@ -1559,6 +1585,9 @@ impl ChatWidget {
             SlashCommand::Model => {
                 self.open_model_popup();
             }
+            SlashCommand::Plan => {
+                self.enter_plan_mode();
+            }
             SlashCommand::Approvals => {
                 self.open_approvals_popup();
             }
@@ -1655,6 +1684,46 @@ impl ChatWidget {
                 }));
             }
         }
+    }
+
+    fn enter_plan_mode(&mut self) {
+        let is_already_plan = self.bottom_pane.interaction_mode() == InteractionMode::Plan;
+        self.set_interaction_mode(InteractionMode::Plan);
+
+        let prompt = if is_already_plan {
+            PLAN_MODE_REPLAN_PROMPT
+        } else {
+            PLAN_MODE_ENTRY_PROMPT
+        };
+        self.submit_op(Op::UserInput {
+            items: vec![UserInput::Text {
+                text: prompt.to_string(),
+            }],
+        });
+    }
+
+    fn set_interaction_mode(&mut self, mode: InteractionMode) {
+        self.bottom_pane.set_interaction_mode(mode);
+        self.submit_op(Op::OverrideTurnContext {
+            cwd: None,
+            approval_policy: None,
+            sandbox_policy: None,
+            model: None,
+            effort: None,
+            summary: None,
+            interaction_mode: Some(mode),
+        });
+    }
+
+    fn cycle_interaction_mode(&mut self) {
+        let next = match self.bottom_pane.interaction_mode() {
+            InteractionMode::Plan => InteractionMode::Normal,
+            InteractionMode::Normal | InteractionMode::Auto => InteractionMode::Plan,
+        };
+
+        // Shift+Tab is a mode toggle only; it should not start a new turn.
+        // Use `/plan` to trigger immediate plan output.
+        self.set_interaction_mode(next);
     }
 
     pub(crate) fn handle_paste(&mut self, text: String) {
@@ -2137,6 +2206,7 @@ impl ChatWidget {
                 model: Some(switch_model.clone()),
                 effort: Some(Some(default_effort)),
                 summary: None,
+                interaction_mode: None,
             }));
             tx.send(AppEvent::UpdateModel(switch_model.clone()));
             tx.send(AppEvent::UpdateReasoningEffort(Some(default_effort)));
@@ -2357,6 +2427,7 @@ impl ChatWidget {
                 model: Some(model_for_action.clone()),
                 effort: Some(effort_for_action),
                 summary: None,
+                interaction_mode: None,
             }));
             tx.send(AppEvent::UpdateModel(model_for_action.clone()));
             tx.send(AppEvent::UpdateReasoningEffort(effort_for_action));
@@ -2528,6 +2599,7 @@ impl ChatWidget {
                 model: Some(model.clone()),
                 effort: Some(effort),
                 summary: None,
+                interaction_mode: None,
             }));
         self.app_event_tx.send(AppEvent::UpdateModel(model.clone()));
         self.app_event_tx
@@ -2635,6 +2707,7 @@ impl ChatWidget {
                 model: None,
                 effort: None,
                 summary: None,
+                interaction_mode: None,
             }));
             tx.send(AppEvent::UpdateAskForApprovalPolicy(approval));
             tx.send(AppEvent::UpdateSandboxPolicy(sandbox_clone));
@@ -3389,6 +3462,16 @@ const EXAMPLE_PROMPTS: [&str; 6] = [
     "Write tests for @filename",
     "Improve documentation in @filename",
 ];
+
+fn is_shift_tab(key_event: &KeyEvent) -> bool {
+    if key_event.kind != KeyEventKind::Press {
+        return false;
+    }
+
+    matches!(key_event.code, KeyCode::BackTab)
+        || (matches!(key_event.code, KeyCode::Tab)
+            && key_event.modifiers.contains(KeyModifiers::SHIFT))
+}
 
 // Extract the first bold (Markdown) element in the form **...** from `s`.
 // Returns the inner text if found; otherwise `None`.

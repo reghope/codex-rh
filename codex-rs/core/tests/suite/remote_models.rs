@@ -138,6 +138,7 @@ async fn remote_models_remote_model_uses_unified_exec() -> Result<()> {
             model: Some(REMOTE_MODEL_SLUG.to_string()),
             effort: None,
             summary: None,
+            interaction_mode: None,
         })
         .await?;
 
@@ -271,6 +272,7 @@ async fn remote_models_apply_remote_base_instructions() -> Result<()> {
             model: Some(model.to_string()),
             effort: None,
             summary: None,
+            interaction_mode: None,
         })
         .await?;
 

@@ -92,6 +92,7 @@ pub use rollout::list::Cursor;
 pub use rollout::list::parse_cursor;
 pub use rollout::list::read_head_for_summary;
 mod function_tool;
+mod plan_mode;
 mod state;
 mod tasks;
 mod user_notification;

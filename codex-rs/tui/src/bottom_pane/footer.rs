@@ -5,6 +5,7 @@ use crate::key_hint::KeyBinding;
 use crate::render::line_utils::prefix_lines;
 use crate::status::format_tokens_compact;
 use crate::ui_consts::FOOTER_INDENT_COLS;
+use codex_core::protocol::InteractionMode;
 use crossterm::event::KeyCode;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
@@ -20,6 +21,7 @@ pub(crate) struct FooterProps {
     pub(crate) esc_backtrack_hint: bool,
     pub(crate) use_shift_enter_hint: bool,
     pub(crate) is_task_running: bool,
+    pub(crate) interaction_mode: InteractionMode,
     pub(crate) context_window_percent: Option<i64>,
     pub(crate) context_window_used_tokens: Option<i64>,
 }
@@ -85,15 +87,18 @@ fn footer_lines(props: FooterProps) -> Vec<Line<'static>> {
             is_task_running: props.is_task_running,
         })],
         FooterMode::ShortcutSummary => {
-            let mut line = context_window_line(
-                props.context_window_percent,
-                props.context_window_used_tokens,
-            );
-            line.push_span(" · ".dim());
-            line.extend(vec![
+            let mut line = Line::from(vec![
                 key_hint::plain(KeyCode::Char('?')).into(),
                 " for shortcuts".dim(),
             ]);
+            line.push_span(" · ".dim());
+            line.push_span(mode_badge(props.interaction_mode));
+            line.push_span(" · ".dim());
+            let context = context_window_line(
+                props.context_window_percent,
+                props.context_window_used_tokens,
+            );
+            line.extend(context.spans);
             vec![line]
         }
         FooterMode::ShortcutOverlay => {
@@ -110,10 +115,24 @@ fn footer_lines(props: FooterProps) -> Vec<Line<'static>> {
             shortcut_overlay_lines(state)
         }
         FooterMode::EscHint => vec![esc_hint_line(props.esc_backtrack_hint)],
-        FooterMode::ContextOnly => vec![context_window_line(
-            props.context_window_percent,
-            props.context_window_used_tokens,
-        )],
+        FooterMode::ContextOnly => {
+            let mut line = Line::from(vec![mode_badge(props.interaction_mode)]);
+            line.push_span(" · ".dim());
+            let context = context_window_line(
+                props.context_window_percent,
+                props.context_window_used_tokens,
+            );
+            line.extend(context.spans);
+            vec![line]
+        }
+    }
+}
+
+fn mode_badge(mode: InteractionMode) -> Span<'static> {
+    match mode {
+        InteractionMode::Plan => "[PLAN]".cyan().bold(),
+        InteractionMode::Auto => "[AUTO]".bold(),
+        InteractionMode::Normal => "[plan]".dim(),
     }
 }
 
@@ -438,6 +457,7 @@ mod tests {
                 esc_backtrack_hint: false,
                 use_shift_enter_hint: false,
                 is_task_running: false,
+                interaction_mode: InteractionMode::Normal,
                 context_window_percent: None,
                 context_window_used_tokens: None,
             },
@@ -450,6 +470,7 @@ mod tests {
                 esc_backtrack_hint: true,
                 use_shift_enter_hint: true,
                 is_task_running: false,
+                interaction_mode: InteractionMode::Normal,
                 context_window_percent: None,
                 context_window_used_tokens: None,
             },
@@ -462,6 +483,7 @@ mod tests {
                 esc_backtrack_hint: false,
                 use_shift_enter_hint: false,
                 is_task_running: false,
+                interaction_mode: InteractionMode::Normal,
                 context_window_percent: None,
                 context_window_used_tokens: None,
             },
@@ -474,6 +496,7 @@ mod tests {
                 esc_backtrack_hint: false,
                 use_shift_enter_hint: false,
                 is_task_running: true,
+                interaction_mode: InteractionMode::Normal,
                 context_window_percent: None,
                 context_window_used_tokens: None,
             },
@@ -486,6 +509,7 @@ mod tests {
                 esc_backtrack_hint: false,
                 use_shift_enter_hint: false,
                 is_task_running: false,
+                interaction_mode: InteractionMode::Normal,
                 context_window_percent: None,
                 context_window_used_tokens: None,
             },
@@ -498,6 +522,7 @@ mod tests {
                 esc_backtrack_hint: true,
                 use_shift_enter_hint: false,
                 is_task_running: false,
+                interaction_mode: InteractionMode::Normal,
                 context_window_percent: None,
                 context_window_used_tokens: None,
             },
@@ -510,6 +535,7 @@ mod tests {
                 esc_backtrack_hint: false,
                 use_shift_enter_hint: false,
                 is_task_running: true,
+                interaction_mode: InteractionMode::Normal,
                 context_window_percent: Some(72),
                 context_window_used_tokens: None,
             },
@@ -522,6 +548,7 @@ mod tests {
                 esc_backtrack_hint: false,
                 use_shift_enter_hint: false,
                 is_task_running: false,
+                interaction_mode: InteractionMode::Normal,
                 context_window_percent: None,
                 context_window_used_tokens: Some(123_456),
             },
