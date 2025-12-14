@@ -123,6 +123,10 @@ impl PlanQuestionsView {
         if self.active_tab < max {
             self.save_active_free_text();
             self.active_tab += 1;
+            if self.active_tab == max && self.answers.iter().all(answer_is_nonempty) {
+                self.submit();
+                return;
+            }
             self.reset_option_cursor();
         }
     }
@@ -768,6 +772,68 @@ impl PlanQuestionsView {
         self.free_text_editor
             .desired_height(usable_width)
             .clamp(1, 3)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app_event::AppEvent;
+    use pretty_assertions::assert_eq;
+    use tokio::sync::mpsc::unbounded_channel;
+
+    fn single_select_round(num_questions: usize) -> PlanQuestionRound {
+        PlanQuestionRound {
+            questions: (0..num_questions)
+                .map(|idx| PlanQuestion {
+                    label: format!("Q{}", idx + 1),
+                    prompt: "Pick one".to_string(),
+                    kind: QuestionKind::SingleSelect,
+                    options: vec![
+                        QuestionOption {
+                            title: "A".to_string(),
+                            description: None,
+                            is_free_text: false,
+                        },
+                        QuestionOption {
+                            title: "(None) Type your answer".to_string(),
+                            description: None,
+                            is_free_text: true,
+                        },
+                    ],
+                })
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn single_select_last_answer_auto_submits() {
+        let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let round = single_select_round(2);
+        let mut view = PlanQuestionsView::new(round, tx);
+
+        view.handle_key_event(KeyEvent::new(KeyCode::Char('1'), KeyModifiers::NONE));
+        assert!(!view.is_complete());
+
+        view.handle_key_event(KeyEvent::new(KeyCode::Char('1'), KeyModifiers::NONE));
+        assert!(view.is_complete());
+
+        let mut submitted = None;
+        while let Ok(ev) = rx.try_recv() {
+            if let AppEvent::CodexOp(Op::UserInput { items }) = ev {
+                submitted = items
+                    .iter()
+                    .filter_map(|item| match item {
+                        UserInput::Text { text } => Some(text.clone()),
+                        _ => None,
+                    })
+                    .next();
+                break;
+            }
+        }
+
+        assert_eq!(submitted.as_deref(), Some("1\n1"));
     }
 }
 

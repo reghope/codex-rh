@@ -150,7 +150,7 @@ Plan Mode entry requested.
 Print the Plan Mode entry output now:
 - Goal (1–2 lines)
 - Plan (numbered steps)
-- Decision points (round 1 of up to 5 rounds; 1–5 questions)
+- Decision points (round 1 of up to 3 rounds; 1–5 questions)
 
 Decision points formatting (required):
 - Use an exact section header line: "Decision points"
@@ -160,6 +160,7 @@ Decision points formatting (required):
 
 Ask only structured single-/multi-select questions. Each select question has 2–5 options total; the last option is always "(None) Type your answer".
 If the goal is ambiguous or missing, make the first decision point ask for it.
+Prefer a single question round; only ask follow-ups if strictly necessary.
 Do not include answer-format instructions or reply examples in the output; the UI will collect answers.
 Do not execute yet; wait for answers.
 </user_instructions>"#;
@@ -174,6 +175,7 @@ Decision points formatting (required):
 - If an option needs a description, put it on the next line indented by 5 spaces.
 
 Print an updated Goal/Plan/Decision points/Checkpoints/Rollback, then wait for answers.
+Prefer a single question round; only ask follow-ups if strictly necessary.
 Do not include answer-format instructions or reply examples in the output; the UI will collect answers.
 </user_instructions>"#;
 // Track information about an in-flight exec command.
