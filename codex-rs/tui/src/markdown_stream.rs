@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use ratatui::text::Line;
 
 use crate::markdown;
@@ -8,6 +10,7 @@ pub(crate) struct MarkdownStreamCollector {
     buffer: String,
     committed_line_count: usize,
     width: Option<usize>,
+    hide_plan_decision_point_options: bool,
 }
 
 impl MarkdownStreamCollector {
@@ -16,7 +19,12 @@ impl MarkdownStreamCollector {
             buffer: String::new(),
             committed_line_count: 0,
             width,
+            hide_plan_decision_point_options: false,
         }
+    }
+
+    pub fn set_hide_plan_decision_point_options(&mut self, hide: bool) {
+        self.hide_plan_decision_point_options = hide;
     }
 
     pub fn clear(&mut self) {
@@ -33,15 +41,14 @@ impl MarkdownStreamCollector {
     /// since the last commit. When the buffer does not end with a newline, the
     /// final rendered line is considered incomplete and is not emitted.
     pub fn commit_complete_lines(&mut self) -> Vec<Line<'static>> {
-        let source = self.buffer.clone();
-        let last_newline_idx = source.rfind('\n');
-        let source = if let Some(last_newline_idx) = last_newline_idx {
-            source[..=last_newline_idx].to_string()
-        } else {
+        let mut source = self.buffer.clone();
+        let Some(last_newline_idx) = source.rfind('\n') else {
             return Vec::new();
         };
+        source.truncate(last_newline_idx + 1);
+        let source = self.sanitize_for_display(&source);
         let mut rendered: Vec<Line<'static>> = Vec::new();
-        markdown::append_markdown(&source, self.width, &mut rendered);
+        markdown::append_markdown(source.as_ref(), self.width, &mut rendered);
         let mut complete_line_count = rendered.len();
         if complete_line_count > 0
             && crate::render::line_utils::is_blank_line_spaces_only(
@@ -82,7 +89,8 @@ impl MarkdownStreamCollector {
         tracing::trace!("markdown finalize (raw source):\n---\n{source}\n---");
 
         let mut rendered: Vec<Line<'static>> = Vec::new();
-        markdown::append_markdown(&source, self.width, &mut rendered);
+        let source = self.sanitize_for_display(&source);
+        markdown::append_markdown(source.as_ref(), self.width, &mut rendered);
 
         let out = if self.committed_line_count >= rendered.len() {
             Vec::new()
@@ -94,6 +102,83 @@ impl MarkdownStreamCollector {
         self.clear();
         out
     }
+
+    fn sanitize_for_display<'a>(&self, source: &'a str) -> Cow<'a, str> {
+        if !self.hide_plan_decision_point_options {
+            return Cow::Borrowed(source);
+        }
+
+        sanitize_plan_mode_decision_point_options(source)
+    }
+}
+
+fn sanitize_plan_mode_decision_point_options(source: &str) -> Cow<'_, str> {
+    if !source.contains("Decision points") {
+        return Cow::Borrowed(source);
+    }
+
+    let mut out = String::with_capacity(source.len());
+    let mut in_decision_points = false;
+    let mut removed_any = false;
+
+    for line in source.split_inclusive('\n') {
+        let line_without_newline = line.strip_suffix('\n').unwrap_or(line);
+        let trimmed = line_without_newline.trim();
+
+        if !in_decision_points {
+            out.push_str(line);
+            if is_decision_points_header(trimmed) {
+                in_decision_points = true;
+            }
+            continue;
+        }
+
+        if is_plan_section_header(trimmed) {
+            in_decision_points = false;
+            out.push_str(line);
+            continue;
+        }
+
+        if trimmed.is_empty() {
+            out.push_str(line);
+            continue;
+        }
+
+        if line_without_newline
+            .chars()
+            .next()
+            .is_some_and(char::is_whitespace)
+        {
+            removed_any = true;
+            continue;
+        }
+
+        out.push_str(line);
+    }
+
+    if removed_any {
+        Cow::Owned(out)
+    } else {
+        Cow::Borrowed(source)
+    }
+}
+
+fn is_decision_points_header(line: &str) -> bool {
+    matches!(line, "Decision points" | "Decision points:")
+}
+
+fn is_plan_section_header(line: &str) -> bool {
+    matches!(
+        line,
+        "Goal"
+            | "Goal:"
+            | "Plan"
+            | "Plan:"
+            | "Checkpoints"
+            | "Checkpoints:"
+            | "Rollback"
+            | "Rollback:"
+    )
 }
 
 #[cfg(test)]
@@ -137,6 +222,38 @@ mod tests {
         c.push_delta("Line without newline");
         let out = c.finalize_and_drain();
         assert_eq!(out.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn plan_mode_hides_decision_point_options_in_display_output() {
+        let mut c = super::MarkdownStreamCollector::new(None);
+        c.set_hide_plan_decision_point_options(true);
+        c.push_delta(
+            "Goal\nX\n\nPlan\n1. Keep this\n\nDecision points\n1) **Scope** (single-select): Choose one\n  1. Option A\n  2. Option B\n\nCheckpoints\n- None\n",
+        );
+        let out = c.finalize_and_drain();
+        let plain = out
+            .iter()
+            .map(|l| {
+                l.spans
+                    .iter()
+                    .map(|s| s.content.clone())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(
+            plain.contains("Keep this"),
+            "expected plan section line retained, got:\n{plain}"
+        );
+        assert!(
+            plain.contains("Scope") && plain.contains("Choose one"),
+            "expected question prompt retained, got:\n{plain}"
+        );
+        assert!(
+            !plain.contains("Option A") && !plain.contains("Option B"),
+            "expected options hidden, got:\n{plain}"
+        );
     }
 
     #[tokio::test]

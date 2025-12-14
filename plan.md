@@ -92,11 +92,6 @@ Plan
 
 Decision points
 1) **Label** (single-select|multi-select): <question prompt>
-   1. <option title>
-      <option description (optional)>
-   2. ...
-   5. (None) Type your answer
-      Next
 2) ...
 
 Checkpoints
@@ -261,7 +256,7 @@ This section is an implementation-oriented breakdown for the Codex CLI codebase.
 
 ### 10.4 Structured questions (render + parsing)
 
-- Render questions as numbered items with explicit option lists (max 5 options; last option is always `(None) Type your answer`).
+- Render structured questions via the interactive Plan questions UI (not by dumping full option lists into the chat transcript).
 - Parse answers from user input (per question type):
   - Single-select: `1`
   - Multi-select: `1,3,4` (with whitespace tolerated)

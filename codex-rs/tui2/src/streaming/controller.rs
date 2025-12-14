@@ -13,9 +13,9 @@ pub(crate) struct StreamController {
 }
 
 impl StreamController {
-    pub(crate) fn new(width: Option<usize>) -> Self {
+    pub(crate) fn new(width: Option<usize>, hide_plan_decision_point_options: bool) -> Self {
         Self {
-            state: StreamState::new(width),
+            state: StreamState::new(width, hide_plan_decision_point_options),
             finishing_after_drain: false,
             header_emitted: false,
         }
@@ -99,7 +99,7 @@ mod tests {
 
     #[tokio::test]
     async fn controller_loose_vs_tight_with_commit_ticks_matches_full() {
-        let mut ctrl = StreamController::new(None);
+        let mut ctrl = StreamController::new(None, false);
         let mut lines = Vec::new();
 
         // Exact deltas from the session log (section: Loose vs. tight list items)

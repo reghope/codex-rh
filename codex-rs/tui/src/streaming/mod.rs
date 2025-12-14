@@ -12,9 +12,11 @@ pub(crate) struct StreamState {
 }
 
 impl StreamState {
-    pub(crate) fn new(width: Option<usize>) -> Self {
+    pub(crate) fn new(width: Option<usize>, hide_plan_decision_point_options: bool) -> Self {
+        let mut collector = MarkdownStreamCollector::new(width);
+        collector.set_hide_plan_decision_point_options(hide_plan_decision_point_options);
         Self {
-            collector: MarkdownStreamCollector::new(width),
+            collector,
             queued_lines: VecDeque::new(),
             has_seen_delta: false,
         }
