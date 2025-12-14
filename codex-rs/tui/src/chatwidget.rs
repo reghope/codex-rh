@@ -162,6 +162,7 @@ Decision points formatting (required):
 
 Ask only structured single-/multi-select questions. Each select question has 2–5 options total; the last option is always "(None) Type your answer".
 If the goal is ambiguous or missing, make the first decision point ask for it.
+Do not include answer-format instructions or reply examples in the output; the UI will collect answers.
 Do not execute yet; wait for answers.
 </user_instructions>"#;
 
@@ -175,6 +176,7 @@ Decision points formatting (required):
 - If an option needs a description, put it on the next line indented by 5 spaces.
 
 Print an updated Goal/Plan/Decision points/Checkpoints/Rollback, then wait for answers.
+Do not include answer-format instructions or reply examples in the output; the UI will collect answers.
 </user_instructions>"#;
 // Track information about an in-flight exec command.
 struct RunningCommand {

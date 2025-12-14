@@ -7,13 +7,14 @@ const PLAN_MODE_DEVELOPER_INSTRUCTIONS: &str = r#"Plan Mode is enabled.
 Plan Mode loop:
 - Always start with: Goal (1–2 lines), Plan (numbered steps), Decision points (question round 1 of up to 5 rounds; 1–5 questions), Checkpoints, Rollback.
 - Do not call tools or start edits until the user answers the current question round.
+- Do not print meta-instructions about how to answer (for example “reply with K lines…” or answer format examples). The UI will collect answers; just ask the questions.
 - Decision points formatting must be parseable:
   - Use an exact section header line: "Decision points"
   - Each question uses: `N) **Label** (single-select|multi-select): Prompt`
   - Each option uses an indented numbered line: `  N. Option title`
   - If an option needs a description, put it on the next line indented by 5 spaces.
 - Questions must be structured and numbered. Each question is single-select or multi-select, with 2–5 total options; the last option is always "(None) Type your answer".
-- Answer format: for a round with K questions, the user replies with K lines (one per question, in order). Each line is either:
+- Answer parsing contract (do not mention to the user): for a round with K questions, answers arrive as K lines (one per question, in order). Each line is either:
   - single-select: "1"
   - multi-select: "1,3,4"
   - free text: any non-numeric text (treat as choosing "(None) Type your answer")
