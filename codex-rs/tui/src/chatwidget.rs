@@ -163,6 +163,7 @@ Decision points formatting (required):
 - Each question uses: `N) **Label** (single-select|multi-select): Prompt`
 - Each option uses an indented numbered line: `  N. Option title`
 - If an option needs a description, put it on the next line indented by 5 spaces.
+Do not use `-` or `*` bullets for options; only use indented numbered lines.
 
 Ask only structured single-/multi-select questions. Each select question has 2–5 options total; the last option is always "(None) Type your answer".
 If the goal is ambiguous or missing, make the first decision point ask for it.
@@ -184,6 +185,7 @@ Decision points formatting (required):
 - Each question uses: `N) **Label** (single-select|multi-select): Prompt`
 - Each option uses an indented numbered line: `  N. Option title`
 - If an option needs a description, put it on the next line indented by 5 spaces.
+Do not use `-` or `*` bullets for options; only use indented numbered lines.
 
 Print an updated Goal/Plan/Decision points/Checkpoints/Rollback, then wait for answers.
 Prefer a single question round; only ask follow-ups if strictly necessary.

@@ -777,7 +777,8 @@ impl PlanQuestionsView {
 
 pub(crate) fn parse_plan_question_round(text: &str) -> Option<PlanQuestionRound> {
     let section_re = Regex::new(r"(?mi)^\s*Decision points\b.*$").ok()?;
-    let question_re = Regex::new(r"(?m)^(?P<indent>\s*)(?P<num>\d+)[\)\.]\s+(?P<rest>.+)$").ok()?;
+    let numbered_re = Regex::new(r"^(?P<indent>\s*)(?P<num>\d+)[\)\.\:\-]\s+(?P<rest>.+)$").ok()?;
+    let bullet_re = Regex::new(r"^(?P<indent>\s*)[-*]\s+(?P<rest>.+)$").ok()?;
 
     let start = section_re.find(text)?.end();
     let after = &text[start..];
@@ -785,6 +786,7 @@ pub(crate) fn parse_plan_question_round(text: &str) -> Option<PlanQuestionRound>
 
     let mut questions: Vec<PlanQuestion> = Vec::new();
     let mut current: Option<PlanQuestion> = None;
+    let mut current_option: Option<QuestionOption> = None;
 
     while let Some(line) = lines.next() {
         let trimmed = line.trim();
@@ -796,86 +798,55 @@ pub(crate) fn parse_plan_question_round(text: &str) -> Option<PlanQuestionRound>
             break;
         }
 
-        let Some(cap) = question_re.captures(line) else {
-            continue;
-        };
-        let indent = cap.name("indent")?.as_str();
-        let num: usize = cap.name("num")?.as_str().parse().ok()?;
-        let rest = cap.name("rest")?.as_str().trim().to_string();
+        if let Some(cap) = numbered_re.captures(line) {
+            let num: usize = cap.name("num")?.as_str().parse().ok()?;
+            let rest = cap.name("rest")?.as_str().trim().to_string();
+            let is_question = looks_like_question(rest.as_str());
 
-        if indent.is_empty() {
-            if let Some(prev) = current.take() {
-                questions.push(prev);
+            if is_question {
+                if let (Some(question), Some(option)) = (current.as_mut(), current_option.take()) {
+                    question.options.push(option);
+                }
+                if let Some(prev) = current.take() {
+                    questions.push(prev);
+                }
+                current = Some(parse_question(num, rest.as_str()));
+                continue;
             }
-            let original = rest.clone();
-            let (label_opt, mut prompt) = split_first_bold_block(&rest);
-            let label = label_opt.unwrap_or_else(|| format!("Question {num}"));
 
-            let lowered = rest.to_ascii_lowercase();
-            let kind = if lowered.contains("multi-select")
-                || lowered.contains("multi select")
-                || lowered.contains("select all")
-            {
-                QuestionKind::MultiSelect
-            } else {
-                QuestionKind::SingleSelect
-            };
-
-            prompt = prompt
-                .replace("(single-select)", "")
-                .replace("(multi-select)", "");
-            let prompt =
-                normalize_free_text(prompt.trim().trim_start_matches([':', '-', '—']).trim());
-            let prompt = if prompt.is_empty() { original } else { prompt };
-
-            current = Some(PlanQuestion {
-                label,
-                prompt,
-                kind,
-                options: Vec::new(),
-            });
+            if let Some(question) = current.as_mut() {
+                if let Some(option) = current_option.take() {
+                    question.options.push(option);
+                }
+                current_option = Some(parse_option(rest.as_str()));
+            }
             continue;
         }
 
-        let Some(question) = current.as_mut() else {
+        if let Some(cap) = bullet_re.captures(line) {
+            let rest = cap.name("rest")?.as_str().trim().to_string();
+            if let Some(question) = current.as_mut() {
+                if let Some(option) = current_option.take() {
+                    question.options.push(option);
+                }
+                current_option = Some(parse_option(rest.as_str()));
+            }
             continue;
-        };
-
-        let rest_lower = rest.to_ascii_lowercase();
-        let is_free_text = rest_lower.contains("type your answer")
-            || rest_lower.contains("type something")
-            || rest_lower.contains("(none)");
-
-        let mut title = rest;
-        let mut description = None;
-        if let Some((lhs, rhs)) = title.as_str().split_once(" - ") {
-            let lhs = lhs.trim().to_string();
-            let rhs = rhs.trim().to_string();
-            title = lhs;
-            description = Some(rhs);
-        } else if let Some((lhs, rhs)) = title.as_str().split_once(" — ") {
-            let lhs = lhs.trim().to_string();
-            let rhs = rhs.trim().to_string();
-            title = lhs;
-            description = Some(rhs);
         }
 
-        // Capture a single indented description line if present.
-        if description.is_none()
-            && lines
-                .peek()
-                .is_some_and(|next| next.starts_with("     ") && !question_re.is_match(next))
-        {
-            description = lines.next().map(|l| l.trim().to_string());
+        if let Some(option) = current_option.as_mut() {
+            if trimmed.is_empty() {
+                continue;
+            }
+            append_option_description(option, trimmed);
         }
-
-        question.options.push(QuestionOption {
-            title,
-            description,
-            is_free_text,
-        });
     }
 
+    if let Some(question) = current.as_mut() {
+        if let Some(option) = current_option.take() {
+            question.options.push(option);
+        }
+    }
     if let Some(prev) = current.take() {
         questions.push(prev);
     }
@@ -913,6 +884,75 @@ pub(crate) fn parse_plan_question_round(text: &str) -> Option<PlanQuestionRound>
     }
 
     Some(PlanQuestionRound { questions })
+}
+
+fn looks_like_question(rest: &str) -> bool {
+    let lowered = rest.to_ascii_lowercase();
+    rest.contains("**")
+        || lowered.contains("single-select")
+        || lowered.contains("single select")
+        || lowered.contains("multi-select")
+        || lowered.contains("multi select")
+        || lowered.contains("select all")
+}
+
+fn parse_question(num: usize, rest: &str) -> PlanQuestion {
+    let original = rest.trim().to_string();
+    let (label_opt, mut prompt) = split_first_bold_block(original.as_str());
+    let label = label_opt.unwrap_or_else(|| format!("Question {num}"));
+
+    let lowered = original.to_ascii_lowercase();
+    let kind = if lowered.contains("multi-select")
+        || lowered.contains("multi select")
+        || lowered.contains("select all")
+    {
+        QuestionKind::MultiSelect
+    } else {
+        QuestionKind::SingleSelect
+    };
+
+    prompt = prompt
+        .replace("(single-select)", "")
+        .replace("(multi-select)", "");
+    let prompt = normalize_free_text(prompt.trim().trim_start_matches([':', '-', '—']).trim());
+    let prompt = if prompt.is_empty() { original } else { prompt };
+
+    PlanQuestion {
+        label,
+        prompt,
+        kind,
+        options: Vec::new(),
+    }
+}
+
+fn parse_option(rest: &str) -> QuestionOption {
+    let rest = rest.trim();
+    let rest_lower = rest.to_ascii_lowercase();
+    let is_free_text = rest_lower.contains("type your answer")
+        || rest_lower.contains("type something")
+        || rest_lower.contains("(none)");
+
+    let (title, description) = if let Some((lhs, rhs)) = rest.split_once(" - ") {
+        (lhs.trim().to_string(), Some(rhs.trim().to_string()))
+    } else if let Some((lhs, rhs)) = rest.split_once(" — ") {
+        (lhs.trim().to_string(), Some(rhs.trim().to_string()))
+    } else {
+        (rest.to_string(), None)
+    };
+
+    QuestionOption {
+        title,
+        description,
+        is_free_text,
+    }
+}
+
+fn append_option_description(option: &mut QuestionOption, line: &str) {
+    let desc = option.description.get_or_insert_with(String::new);
+    if !desc.is_empty() {
+        desc.push(' ');
+    }
+    desc.push_str(line.trim());
 }
 
 fn split_first_bold_block(s: &str) -> (Option<String>, String) {
@@ -1002,5 +1042,96 @@ mod tests {
         }
 
         assert_eq!(submitted.as_deref(), Some("1\n1"));
+    }
+
+    #[test]
+    fn parse_accepts_unindented_options() {
+        let text = "\
+Goal
+X
+
+Decision points
+1) **Scope** (single-select): Choose one
+1. Option A
+2. Option B
+
+Checkpoints
+- None
+";
+        let round = parse_plan_question_round(text).expect("expected round");
+        assert_eq!(round.questions.len(), 1);
+        assert_eq!(round.questions[0].options[0].title, "Option A");
+        assert_eq!(round.questions[0].options[1].title, "Option B");
+        assert_eq!(
+            round.questions[0]
+                .options
+                .last()
+                .expect("expected free text option")
+                .title,
+            "(None) Type your answer"
+        );
+    }
+
+    #[test]
+    fn parse_accepts_colon_separators() {
+        let text = "\
+Decision points
+1: **Scope** (single-select): Choose one
+  1. Option A
+  2. Option B
+";
+        let round = parse_plan_question_round(text).expect("expected round");
+        assert_eq!(round.questions.len(), 1);
+        assert_eq!(round.questions[0].label, "Scope");
+    }
+
+    #[test]
+    fn parse_none_without_questions() {
+        let text = "\
+Decision points
+- This is not formatted as questions
+";
+        assert!(parse_plan_question_round(text).is_none());
+    }
+
+    #[test]
+    fn parse_accepts_bullet_options() {
+        let text = "\
+Decision points
+1) **Scope** (single-select): Choose one
+- Option A
+- Option B
+";
+        let round = parse_plan_question_round(text).expect("expected round");
+        assert_eq!(round.questions.len(), 1);
+        assert_eq!(round.questions[0].options[0].title, "Option A");
+        assert_eq!(round.questions[0].options[1].title, "Option B");
+        assert_eq!(
+            round.questions[0]
+                .options
+                .last()
+                .expect("expected free text option")
+                .title,
+            "(None) Type your answer"
+        );
+    }
+
+    #[test]
+    fn parse_accumulates_multiline_option_description() {
+        let text = "\
+Decision points
+1) **Scope** (single-select): Choose one
+  1. Option A
+     This is a longer description
+     that spans multiple lines.
+  2. Option B
+";
+        let round = parse_plan_question_round(text).expect("expected round");
+        assert_eq!(round.questions.len(), 1);
+        assert_eq!(round.questions[0].options[0].title, "Option A");
+        assert_eq!(
+            round.questions[0].options[0].description.as_deref(),
+            Some("This is a longer description that spans multiple lines.")
+        );
     }
 }

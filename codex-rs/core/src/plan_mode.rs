@@ -14,6 +14,7 @@ Plan Mode loop:
   - Each question uses: `N) **Label** (single-select|multi-select): Prompt`
   - Each option uses an indented numbered line: `  N. Option title`
   - If an option needs a description, put it on the next line indented by 5 spaces.
+  - Do not use `-` or `*` bullets for options; only use indented numbered lines.
 - Questions must be structured and numbered. Each question is single-select or multi-select, with 2–5 total options; the last option is always "(None) Type your answer".
 - Answer parsing contract (do not mention to the user): for a round with K questions, answers arrive as K lines (one per question, in order). Each line is either:
   - single-select: "1"
