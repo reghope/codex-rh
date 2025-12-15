@@ -601,7 +601,7 @@ fn render_options_list(
             };
             ("[ ]", "Type something".to_string(), desc)
         } else {
-            let checked = selected.iter().any(|sel| *sel == idx);
+            let checked = selected.contains(&idx);
             let checkbox = if checked { "[x]" } else { "[ ]" };
             (checkbox, opt.title.clone(), opt.description.clone())
         };
@@ -621,7 +621,7 @@ fn render_options_list(
                     .initial_indent(Line::from("     "))
                     .subsequent_indent(Line::from("     ")),
             );
-            lines.extend(wrapped.into_iter().map(|line| line.dim()));
+            lines.extend(wrapped.into_iter().map(ratatui::prelude::Stylize::dim));
         }
     }
 
@@ -775,68 +775,6 @@ impl PlanQuestionsView {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::app_event::AppEvent;
-    use pretty_assertions::assert_eq;
-    use tokio::sync::mpsc::unbounded_channel;
-
-    fn single_select_round(num_questions: usize) -> PlanQuestionRound {
-        PlanQuestionRound {
-            questions: (0..num_questions)
-                .map(|idx| PlanQuestion {
-                    label: format!("Q{}", idx + 1),
-                    prompt: "Pick one".to_string(),
-                    kind: QuestionKind::SingleSelect,
-                    options: vec![
-                        QuestionOption {
-                            title: "A".to_string(),
-                            description: None,
-                            is_free_text: false,
-                        },
-                        QuestionOption {
-                            title: "(None) Type your answer".to_string(),
-                            description: None,
-                            is_free_text: true,
-                        },
-                    ],
-                })
-                .collect(),
-        }
-    }
-
-    #[test]
-    fn single_select_last_answer_auto_submits() {
-        let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
-        let tx = AppEventSender::new(tx_raw);
-        let round = single_select_round(2);
-        let mut view = PlanQuestionsView::new(round, tx);
-
-        view.handle_key_event(KeyEvent::new(KeyCode::Char('1'), KeyModifiers::NONE));
-        assert!(!view.is_complete());
-
-        view.handle_key_event(KeyEvent::new(KeyCode::Char('1'), KeyModifiers::NONE));
-        assert!(view.is_complete());
-
-        let mut submitted = None;
-        while let Ok(ev) = rx.try_recv() {
-            if let AppEvent::CodexOp(Op::UserInput { items }) = ev {
-                submitted = items
-                    .iter()
-                    .filter_map(|item| match item {
-                        UserInput::Text { text } => Some(text.clone()),
-                        _ => None,
-                    })
-                    .next();
-                break;
-            }
-        }
-
-        assert_eq!(submitted.as_deref(), Some("1\n1"));
-    }
-}
-
 pub(crate) fn parse_plan_question_round(text: &str) -> Option<PlanQuestionRound> {
     let section_re = Regex::new(r"(?mi)^\s*Decision points\b.*$").ok()?;
     let question_re = Regex::new(r"(?m)^(?P<indent>\s*)(?P<num>\d+)[\)\.]\s+(?P<rest>.+)$").ok()?;
@@ -886,12 +824,8 @@ pub(crate) fn parse_plan_question_round(text: &str) -> Option<PlanQuestionRound>
             prompt = prompt
                 .replace("(single-select)", "")
                 .replace("(multi-select)", "");
-            let prompt = normalize_free_text(
-                prompt
-                    .trim()
-                    .trim_start_matches(|c: char| c == ':' || c == '-' || c == '—')
-                    .trim(),
-            );
+            let prompt =
+                normalize_free_text(prompt.trim().trim_start_matches([':', '-', '—']).trim());
             let prompt = if prompt.is_empty() { original } else { prompt };
 
             current = Some(PlanQuestion {
@@ -1007,4 +941,66 @@ fn split_first_bold_block(s: &str) -> (Option<String>, String) {
         i += 1;
     }
     (None, s.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app_event::AppEvent;
+    use pretty_assertions::assert_eq;
+    use tokio::sync::mpsc::unbounded_channel;
+
+    fn single_select_round(num_questions: usize) -> PlanQuestionRound {
+        PlanQuestionRound {
+            questions: (0..num_questions)
+                .map(|idx| PlanQuestion {
+                    label: format!("Q{}", idx + 1),
+                    prompt: "Pick one".to_string(),
+                    kind: QuestionKind::SingleSelect,
+                    options: vec![
+                        QuestionOption {
+                            title: "A".to_string(),
+                            description: None,
+                            is_free_text: false,
+                        },
+                        QuestionOption {
+                            title: "(None) Type your answer".to_string(),
+                            description: None,
+                            is_free_text: true,
+                        },
+                    ],
+                })
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn single_select_last_answer_auto_submits() {
+        let (tx_raw, mut rx) = unbounded_channel::<AppEvent>();
+        let tx = AppEventSender::new(tx_raw);
+        let round = single_select_round(2);
+        let mut view = PlanQuestionsView::new(round, tx);
+
+        view.handle_key_event(KeyEvent::new(KeyCode::Char('1'), KeyModifiers::NONE));
+        assert!(!view.is_complete());
+
+        view.handle_key_event(KeyEvent::new(KeyCode::Char('1'), KeyModifiers::NONE));
+        assert!(view.is_complete());
+
+        let mut submitted = None;
+        while let Ok(ev) = rx.try_recv() {
+            if let AppEvent::CodexOp(Op::UserInput { items }) = ev {
+                submitted = items
+                    .iter()
+                    .filter_map(|item| match item {
+                        UserInput::Text { text } => Some(text.clone()),
+                        _ => None,
+                    })
+                    .next();
+                break;
+            }
+        }
+
+        assert_eq!(submitted.as_deref(), Some("1\n1"));
+    }
 }

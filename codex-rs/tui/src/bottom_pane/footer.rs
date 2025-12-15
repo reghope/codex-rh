@@ -88,21 +88,24 @@ fn footer_lines(props: FooterProps) -> Vec<Line<'static>> {
         })],
         FooterMode::ShortcutSummary => {
             if props.interaction_mode == InteractionMode::Plan {
-                return vec![plan_mode_hint_line()];
+                return vec![plan_mode_hint_line(
+                    props.context_window_percent,
+                    props.context_window_used_tokens,
+                )];
             }
 
-            let mut line = Line::from(vec![
-                key_hint::plain(KeyCode::Char('?')).into(),
-                " for shortcuts".dim(),
-            ]);
-            line.push_span(" · ".dim());
-            line.push_span(mode_badge(props.interaction_mode));
-            line.push_span(" · ".dim());
             let context = context_window_line(
                 props.context_window_percent,
                 props.context_window_used_tokens,
             );
-            line.extend(context.spans);
+            let mut line = Line::from(context.spans);
+            if props.interaction_mode == InteractionMode::Auto {
+                line.push_span(" · ".dim());
+                line.push_span(mode_badge(props.interaction_mode));
+            }
+            line.push_span(" · ".dim());
+            line.push_span(key_hint::plain(KeyCode::Char('?')));
+            line.push_span(" for shortcuts".dim());
             vec![line]
         }
         FooterMode::ShortcutOverlay => {
@@ -121,26 +124,35 @@ fn footer_lines(props: FooterProps) -> Vec<Line<'static>> {
         FooterMode::EscHint => vec![esc_hint_line(props.esc_backtrack_hint)],
         FooterMode::ContextOnly => {
             if props.interaction_mode == InteractionMode::Plan {
-                return vec![plan_mode_hint_line()];
+                return vec![plan_mode_hint_line(
+                    props.context_window_percent,
+                    props.context_window_used_tokens,
+                )];
             }
 
-            let mut line = Line::from(vec![mode_badge(props.interaction_mode)]);
-            line.push_span(" · ".dim());
             let context = context_window_line(
                 props.context_window_percent,
                 props.context_window_used_tokens,
             );
-            line.extend(context.spans);
+            let mut line = Line::from(context.spans);
+            if props.interaction_mode == InteractionMode::Auto {
+                line.push_span(" · ".dim());
+                line.push_span(mode_badge(props.interaction_mode));
+            }
             vec![line]
         }
     }
 }
 
-fn plan_mode_hint_line() -> Line<'static> {
-    Line::from(vec![
+fn plan_mode_hint_line(percent: Option<i64>, used_tokens: Option<i64>) -> Line<'static> {
+    let context = context_window_line(percent, used_tokens);
+    let mut line = Line::from(vec![
         "Plan mode on".cyan().bold(),
         " (shift+tab to toggle)".dim(),
-    ])
+        " · ".dim(),
+    ]);
+    line.extend(context.spans);
+    line
 }
 
 fn mode_badge(mode: InteractionMode) -> Span<'static> {
@@ -590,6 +602,9 @@ mod tests {
             .iter()
             .map(|span| span.content.as_ref())
             .collect();
-        assert_eq!(text, "Plan mode on (shift+tab to toggle)");
+        assert_eq!(
+            text,
+            "Plan mode on (shift+tab to toggle) · 100% context left"
+        );
     }
 }
