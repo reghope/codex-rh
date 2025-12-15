@@ -1,6 +1,8 @@
 mod storage;
 
 use chrono::Utc;
+#[cfg(any(test, feature = "test-support"))]
+use once_cell::sync::Lazy;
 use reqwest::StatusCode;
 use serde::Deserialize;
 use serde::Serialize;
@@ -14,6 +16,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
+#[cfg(any(test, feature = "test-support"))]
+use tempfile::TempDir;
 
 use codex_app_server_protocol::AuthMode;
 use codex_protocol::config_types::ForcedLoginMethod;

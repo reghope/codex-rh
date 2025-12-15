@@ -541,8 +541,6 @@ impl ChatComposer {
                                 let starts_with_cmd = first_line.trim_start().starts_with(&prefix);
                                 if !starts_with_cmd {
                                     self.textarea.set_text(&prefix);
-                                } else if self.textarea.text() == format!("/{cmd_name}") {
-                                    self.textarea.set_text(&prefix);
                                 }
                                 self.textarea.set_cursor(self.textarea.text().len());
                                 self.active_popup = ActivePopup::None;

@@ -605,6 +605,14 @@ impl ChatWidget {
     }
 
     fn on_task_complete(&mut self, last_agent_message: Option<String>) {
+        let last_agent_message = last_agent_message.or_else(|| {
+            self.stream_controller
+                .as_ref()
+                .map(StreamController::raw_buffer)
+                .filter(|buf| !buf.trim().is_empty())
+                .map(ToString::to_string)
+        });
+
         // If a stream is currently active, finalize it.
         self.flush_answer_stream_with_separator();
         // Mark task stopped and request redraw now that all content is in history.
@@ -622,7 +630,7 @@ impl ChatWidget {
         }
         // Emit a notification when the turn completes (suppressed if focused).
         self.notify(Notification::AgentTurnComplete {
-            response: last_agent_message.unwrap_or_default(),
+            response: last_agent_message.clone().unwrap_or_default(),
         });
 
         self.maybe_show_pending_rate_limit_prompt();

@@ -25,7 +25,6 @@ use ratatui::widgets::Widget;
 
 use codex_protocol::protocol::Op;
 use codex_protocol::user_input::UserInput;
-use regex_lite::Regex;
 
 use super::CancellationEvent;
 use super::bottom_pane_view::BottomPaneView;
@@ -776,19 +775,18 @@ impl PlanQuestionsView {
 }
 
 pub(crate) fn parse_plan_question_round(text: &str) -> Option<PlanQuestionRound> {
-    let section_re = Regex::new(r"(?mi)^\s*Decision points\b.*$").ok()?;
-    let numbered_re = Regex::new(r"^(?P<indent>\s*)(?P<num>\d+)[\)\.\:\-]\s+(?P<rest>.+)$").ok()?;
-    let bullet_re = Regex::new(r"^(?P<indent>\s*)[-*]\s+(?P<rest>.+)$").ok()?;
-
-    let start = section_re.find(text)?.end();
-    let after = &text[start..];
-    let mut lines = after.lines().peekable();
+    let mut lines = text.lines();
+    for line in lines.by_ref() {
+        if is_decision_points_header(line) {
+            break;
+        }
+    }
 
     let mut questions: Vec<PlanQuestion> = Vec::new();
     let mut current: Option<PlanQuestion> = None;
     let mut current_option: Option<QuestionOption> = None;
 
-    while let Some(line) = lines.next() {
+    for line in lines {
         let trimmed = line.trim();
         if trimmed.eq_ignore_ascii_case("checkpoints")
             || trimmed.eq_ignore_ascii_case("rollback")
@@ -798,9 +796,8 @@ pub(crate) fn parse_plan_question_round(text: &str) -> Option<PlanQuestionRound>
             break;
         }
 
-        if let Some(cap) = numbered_re.captures(line) {
-            let num: usize = cap.name("num")?.as_str().parse().ok()?;
-            let rest = cap.name("rest")?.as_str().trim().to_string();
+        if let Some((num, rest)) = parse_numbered_line(line) {
+            let rest = rest.trim().to_string();
             let is_question = looks_like_question(rest.as_str());
 
             if is_question {
@@ -823,8 +820,8 @@ pub(crate) fn parse_plan_question_round(text: &str) -> Option<PlanQuestionRound>
             continue;
         }
 
-        if let Some(cap) = bullet_re.captures(line) {
-            let rest = cap.name("rest")?.as_str().trim().to_string();
+        if let Some(rest) = parse_bullet_line(line) {
+            let rest = rest.trim().to_string();
             if let Some(question) = current.as_mut() {
                 if let Some(option) = current_option.take() {
                     question.options.push(option);
@@ -842,10 +839,10 @@ pub(crate) fn parse_plan_question_round(text: &str) -> Option<PlanQuestionRound>
         }
     }
 
-    if let Some(question) = current.as_mut() {
-        if let Some(option) = current_option.take() {
-            question.options.push(option);
-        }
+    if let Some(question) = current.as_mut()
+        && let Some(option) = current_option.take()
+    {
+        question.options.push(option);
     }
     if let Some(prev) = current.take() {
         questions.push(prev);
@@ -884,6 +881,75 @@ pub(crate) fn parse_plan_question_round(text: &str) -> Option<PlanQuestionRound>
     }
 
     Some(PlanQuestionRound { questions })
+}
+
+fn is_decision_points_header(line: &str) -> bool {
+    let trimmed = line.trim();
+    let rest = trimmed.trim_start_matches('#').trim_start();
+
+    let lower = rest.to_ascii_lowercase();
+    if !lower.starts_with("decision points") {
+        return false;
+    }
+
+    let suffix = &rest["decision points".len()..];
+    suffix.is_empty()
+        || suffix
+            .chars()
+            .next()
+            .is_some_and(|c| matches!(c, ':' | '-' | '—' | '<') || c.is_whitespace())
+}
+
+fn parse_numbered_line(line: &str) -> Option<(usize, &str)> {
+    let trimmed = line.trim_start();
+    let (digits, rest) = split_digits_prefix(trimmed)?;
+
+    let mut chars = rest.chars();
+    match chars.next()? {
+        ')' | '.' | ':' | '-' => {}
+        _ => return None,
+    }
+    if !chars
+        .as_str()
+        .chars()
+        .next()
+        .is_some_and(char::is_whitespace)
+    {
+        return None;
+    }
+
+    let num: usize = digits.parse().ok()?;
+    Some((num, chars.as_str().trim_start()))
+}
+
+fn parse_bullet_line(line: &str) -> Option<&str> {
+    let trimmed = line.trim_start();
+    let mut chars = trimmed.chars();
+    match chars.next()? {
+        '-' | '*' => {}
+        _ => return None,
+    }
+    if !chars
+        .as_str()
+        .chars()
+        .next()
+        .is_some_and(char::is_whitespace)
+    {
+        return None;
+    }
+    Some(chars.as_str().trim_start())
+}
+
+fn split_digits_prefix(s: &str) -> Option<(&str, &str)> {
+    let bytes = s.as_bytes();
+    let mut i = 0usize;
+    while i < bytes.len() && bytes[i].is_ascii_digit() {
+        i += 1;
+    }
+    if i == 0 {
+        return None;
+    }
+    Some((&s[..i], &s[i..]))
 }
 
 fn looks_like_question(rest: &str) -> bool {

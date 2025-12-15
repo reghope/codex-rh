@@ -37,6 +37,10 @@ impl MarkdownStreamCollector {
         self.buffer.push_str(delta);
     }
 
+    pub fn raw_buffer(&self) -> &str {
+        &self.buffer
+    }
+
     /// Render the full buffer and return only the newly completed logical lines
     /// since the last commit. When the buffer does not end with a newline, the
     /// final rendered line is considered incomplete and is not emitted.

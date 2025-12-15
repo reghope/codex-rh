@@ -27,6 +27,7 @@ use codex_core::protocol::ExecCommandSource;
 use codex_core::protocol::ExecPolicyAmendment;
 use codex_core::protocol::ExitedReviewModeEvent;
 use codex_core::protocol::FileChange;
+use codex_core::protocol::InteractionMode;
 use codex_core::protocol::McpStartupStatus;
 use codex_core::protocol::McpStartupUpdateEvent;
 use codex_core::protocol::Op;
@@ -2919,6 +2920,36 @@ fn plan_update_renders_history_cell() {
     assert!(blob.contains("Explore codebase"));
     assert!(blob.contains("Implement feature"));
     assert!(blob.contains("Write tests"));
+}
+
+#[test]
+fn plan_mode_shows_decision_points_ui_when_task_complete_missing_last_agent_message() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(None);
+    chat.bottom_pane.set_interaction_mode(InteractionMode::Plan);
+
+    chat.handle_codex_event(Event {
+        id: "task".into(),
+        msg: EventMsg::TaskStarted(TaskStartedEvent {
+            model_context_window: None,
+        }),
+    });
+    drain_insert_history(&mut rx);
+
+    chat.handle_codex_event(Event {
+        id: "delta".into(),
+        msg: EventMsg::AgentMessageDelta(AgentMessageDeltaEvent {
+            delta: "Goal\nX\n\nPlan\n1. Keep this\n\nDecision points\n1) **Scope** (single-select): Choose one\n  1. Option A\n  2. (None) Type your answer\n\nCheckpoints\n- None\n".to_string(),
+        }),
+    });
+
+    chat.handle_codex_event(Event {
+        id: "done".into(),
+        msg: EventMsg::TaskComplete(TaskCompleteEvent {
+            last_agent_message: None,
+        }),
+    });
+
+    assert_eq!(chat.bottom_pane.active_view_count(), 1);
 }
 
 #[test]

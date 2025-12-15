@@ -162,6 +162,11 @@ impl BottomPane {
     }
 
     #[cfg(test)]
+    pub(crate) fn active_view_count(&self) -> usize {
+        self.view_stack.len()
+    }
+
+    #[cfg(test)]
     pub(crate) fn context_window_percent(&self) -> Option<i64> {
         self.context_window_percent
     }

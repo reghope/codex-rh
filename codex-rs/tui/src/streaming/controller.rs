@@ -38,6 +38,10 @@ impl StreamController {
         false
     }
 
+    pub(crate) fn raw_buffer(&self) -> &str {
+        self.state.collector.raw_buffer()
+    }
+
     /// Finalize the active stream. Drain and emit now.
     pub(crate) fn finalize(&mut self) -> Option<Box<dyn HistoryCell>> {
         // Finalize collector first.
