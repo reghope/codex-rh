@@ -872,10 +872,8 @@ pub(crate) fn parse_plan_question_round(text: &str) -> Option<PlanQuestionRound>
                 is_free_text: true,
             });
         } else if let Some(last) = q.options.last_mut() {
-            last.is_free_text = true;
-        }
-
-        if let Some(last) = q.options.last_mut() {
+            last.title = "(None) Type your answer".to_string();
+            last.description = None;
             last.is_free_text = true;
         }
     }
@@ -1198,6 +1196,39 @@ Decision points
         assert_eq!(
             round.questions[0].options[0].description.as_deref(),
             Some("This is a longer description that spans multiple lines.")
+        );
+    }
+
+    #[test]
+    fn parse_forces_free_text_without_relabeling_real_option() {
+        let text = "\
+Decision points
+1) **Scope** (single-select): Choose one
+  1. Option A
+  2. Option B
+  3. Option C
+  4. Option D
+  5. Option E
+";
+        let round = parse_plan_question_round(text).expect("expected round");
+        assert_eq!(round.questions.len(), 1);
+        assert_eq!(round.questions[0].options.len(), 5);
+        assert_eq!(round.questions[0].options[0].title, "Option A");
+        assert_eq!(round.questions[0].options[3].title, "Option D");
+        assert_eq!(
+            round.questions[0]
+                .options
+                .last()
+                .expect("expected free text option")
+                .title,
+            "(None) Type your answer"
+        );
+        assert!(
+            round.questions[0]
+                .options
+                .last()
+                .expect("expected free text option")
+                .is_free_text
         );
     }
 }
