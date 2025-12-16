@@ -46,31 +46,65 @@ fn subagents_tree_lines(
     background_mode: bool,
 ) -> Vec<Line<'static>> {
     let mut lines = Vec::new();
+
+    let failed_count = update
+        .agents
+        .iter()
+        .filter(|agent| agent.status == SubAgentStatus::Failed)
+        .count();
+    let finished_count = update.created_count.saturating_sub(update.running_count);
+    let any_transcripts = update
+        .agents
+        .iter()
+        .any(|agent| !agent.transcript.is_empty() || agent.transcript_truncated);
     let bg_badge = if background_mode {
         "bg:on".cyan().bold()
     } else {
         "bg:off".dim()
     };
-    lines.push(Line::from(vec![
-        "Running ".into(),
-        update.running_count.to_string().bold(),
-        " Task agents… ".into(),
-        "(".dim(),
-        "ctrl+o".dim(),
-        if show_transcripts {
-            " to collapse transcripts".dim()
-        } else {
-            " to expand transcripts".dim()
-        },
-        " · ".dim(),
-        "ctrl+b".dim(),
-        " ".dim(),
-        bg_badge,
-        ")".dim(),
-    ]));
 
-    for (idx, agent) in update.agents.iter().enumerate() {
-        let is_last = idx + 1 == update.agents.len();
+    let mut header = Line::from(vec![
+        "Subagents ".bold(),
+        format!("{}/{}", update.running_count, update.created_count).bold(),
+        " running".into(),
+    ]);
+    if finished_count > 0 {
+        header.push_span(" · ".dim());
+        header.push_span(format!("{finished_count} finished").dim());
+    }
+    if failed_count > 0 {
+        header.push_span(" · ".dim());
+        header.push_span(format!("{failed_count} failed").red().bold());
+    }
+
+    header.push_span(" (".dim());
+    if any_transcripts {
+        header.push_span("ctrl+o".dim());
+        header.push_span(if show_transcripts {
+            " hide transcripts".dim()
+        } else {
+            " show transcripts".dim()
+        });
+        header.push_span(" · ".dim());
+    }
+    header.push_span("ctrl+b".dim());
+    header.push_span(" ".dim());
+    header.push_span(bg_badge);
+    header.push_span(")".dim());
+
+    lines.push(header);
+
+    let mut agents: Vec<&SubAgentUiItem> = update.agents.iter().collect();
+    agents.sort_by_key(|agent| {
+        (
+            status_sort_rank(agent.status),
+            agent.title.as_str(),
+            agent.id.as_str(),
+        )
+    });
+
+    for (idx, agent) in agents.iter().enumerate() {
+        let is_last = idx + 1 == agents.len();
         lines.extend(subagent_lines(agent, is_last, show_transcripts));
     }
 
@@ -83,17 +117,22 @@ fn subagent_lines(
     show_transcripts: bool,
 ) -> Vec<Line<'static>> {
     let branch = if is_last { "└─ " } else { "├─ " };
+    let title = Span::from(agent.title.clone()).dim();
     let title = match agent.status {
         SubAgentStatus::Running => Span::from(agent.title.clone()),
-        SubAgentStatus::Completed | SubAgentStatus::Canceled => {
-            Span::from(agent.title.clone()).dim()
-        }
-        SubAgentStatus::Failed => Span::from(agent.title.clone()).red(),
+        SubAgentStatus::Failed => Span::from(agent.title.clone()).red().bold(),
+        SubAgentStatus::Completed | SubAgentStatus::Canceled => title,
     };
 
-    let mut header = Line::from(vec![branch.dim(), title]);
+    let mut header = Line::from(vec![
+        branch.dim(),
+        status_badge(agent.status),
+        " ".dim(),
+        title,
+        format!(" ({})", agent.template).dim(),
+    ]);
     header.push_span(" · ".dim());
-    header.push_span(format!("{} tool uses", agent.tool_uses).dim());
+    header.push_span(format!("{} tools", agent.tool_uses).dim());
     header.push_span(" · ".dim());
     let total_tokens = agent
         .total_tokens
@@ -101,16 +140,16 @@ fn subagent_lines(
     header.push_span(format!("{total_tokens} tokens").dim());
 
     let pipe = if is_last { "   " } else { "│  " };
-    let (kind, label) = if let Some(activity) = agent.last_activity.as_ref() {
-        let kind = match activity.kind {
-            SubAgentActivityKind::Bash => "Bash",
-            SubAgentActivityKind::Read => "Read",
-            SubAgentActivityKind::Mcp => "MCP",
-            SubAgentActivityKind::WebSearch => "WebSearch",
-            SubAgentActivityKind::ApplyPatch => "ApplyPatch",
-            SubAgentActivityKind::Other => "Activity",
+    let (kind_style, label) = if let Some(activity) = agent.last_activity.as_ref() {
+        let kind_style = match activity.kind {
+            SubAgentActivityKind::Bash => "Bash".magenta().bold(),
+            SubAgentActivityKind::Read => "Read".cyan(),
+            SubAgentActivityKind::Mcp => "MCP".green(),
+            SubAgentActivityKind::WebSearch => "WebSearch".cyan(),
+            SubAgentActivityKind::ApplyPatch => "ApplyPatch".green(),
+            SubAgentActivityKind::Other => "Activity".dim(),
         };
-        (kind, activity.label.clone())
+        (kind_style, activity.label.clone())
     } else {
         let label = match agent.status {
             SubAgentStatus::Running => "Starting…",
@@ -118,7 +157,7 @@ fn subagent_lines(
             SubAgentStatus::Failed => "Failed",
             SubAgentStatus::Canceled => "Canceled",
         };
-        ("Activity", label.to_string())
+        ("Activity".dim(), label.to_string())
     };
 
     let mut lines = vec![
@@ -126,12 +165,13 @@ fn subagent_lines(
         Line::from(vec![
             pipe.dim(),
             "⎿  ".dim(),
-            format!("{kind}: ").dim(),
+            kind_style,
+            ": ".dim(),
             label.into(),
         ]),
     ];
 
-    if show_transcripts && !agent.transcript.is_empty() {
+    if show_transcripts && (!agent.transcript.is_empty() || agent.transcript_truncated) {
         for line in &agent.transcript {
             lines.push(Line::from(vec![
                 pipe.dim(),
@@ -149,4 +189,22 @@ fn subagent_lines(
     }
 
     lines
+}
+
+fn status_badge(status: SubAgentStatus) -> Span<'static> {
+    match status {
+        SubAgentStatus::Running => "RUN".cyan().bold(),
+        SubAgentStatus::Completed => "OK".dim(),
+        SubAgentStatus::Failed => "FAIL".red().bold(),
+        SubAgentStatus::Canceled => "CXL".dim(),
+    }
+}
+
+fn status_sort_rank(status: SubAgentStatus) -> u8 {
+    match status {
+        SubAgentStatus::Running => 0,
+        SubAgentStatus::Failed => 1,
+        SubAgentStatus::Canceled => 2,
+        SubAgentStatus::Completed => 3,
+    }
 }

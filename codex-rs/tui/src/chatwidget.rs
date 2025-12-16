@@ -1569,7 +1569,7 @@ impl ChatWidget {
                 enabled: self.subagents_background_mode,
             });
             self.add_info_message(
-                format!("Sub-agents background mode: {state}"),
+                format!("Subagents background mode: {state}"),
                 Some(
                     "When on, sub-agent progress stays in the tree while you keep chatting.".into(),
                 ),
@@ -1579,6 +1579,7 @@ impl ChatWidget {
 
         if key_event.code == KeyCode::Char('o')
             && key_event.modifiers == KeyModifiers::CONTROL
+            && key_event.kind == KeyEventKind::Press
             && self
                 .subagents_update
                 .as_ref()
@@ -1588,7 +1589,6 @@ impl ChatWidget {
             self.request_redraw();
             return;
         }
-
         match key_event {
             KeyEvent {
                 code: KeyCode::Char(c),

@@ -5,6 +5,7 @@ use codex_protocol::protocol::InteractionMode;
 const PLAN_MODE_DEVELOPER_INSTRUCTIONS: &str = r#"Plan Mode is enabled.
 
 Plan Mode loop:
+- Before asking questions: privately infer the most likely prompt that would have produced the user’s request; use it to seed the Decision points and Plan. Do not print it unless the user explicitly asks; if asked, add a single line under Goal prefixed with "Reverse prompt result:".
 - When asking questions: print Goal (1–2 lines), Plan (numbered steps), Decision points (question round 1 of up to 3 rounds; 1–5 questions).
 - Prefer a single question round; only ask follow-ups if strictly necessary.
 - Do not call tools or start edits until the user answers the current question round.
