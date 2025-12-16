@@ -24,6 +24,7 @@ pub(crate) struct FooterProps {
     pub(crate) interaction_mode: InteractionMode,
     pub(crate) context_window_percent: Option<i64>,
     pub(crate) context_window_used_tokens: Option<i64>,
+    pub(crate) subagents_running_count: usize,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -102,14 +103,27 @@ fn footer_lines_without_subagents(props: &FooterProps) -> Vec<Line<'static>> {
                 props.context_window_percent,
                 props.context_window_used_tokens,
             );
-            let mut line = Line::from(context.spans);
-            if props.interaction_mode == InteractionMode::Auto {
+            let mut line = if props.subagents_running_count > 0 {
+                let mut line = Line::from(vec![
+                    "Subagents ".dim(),
+                    props.subagents_running_count.to_string().blue(),
+                    " · ".dim(),
+                ]);
+                line.extend(context.spans);
+                line
+            } else {
+                Line::from(context.spans)
+            };
+            if props.interaction_mode == InteractionMode::Auto && props.subagents_running_count == 0
+            {
                 line.push_span(" · ".dim());
                 line.push_span(mode_badge(props.interaction_mode));
             }
-            line.push_span(" · ".dim());
-            line.push_span(key_hint::plain(KeyCode::Char('?')));
-            line.push_span(" for shortcuts".dim());
+            if props.subagents_running_count == 0 {
+                line.push_span(" · ".dim());
+                line.push_span(key_hint::plain(KeyCode::Char('?')));
+                line.push_span(" for shortcuts".dim());
+            }
             vec![line]
         }
         FooterMode::ShortcutOverlay => {
@@ -138,8 +152,19 @@ fn footer_lines_without_subagents(props: &FooterProps) -> Vec<Line<'static>> {
                 props.context_window_percent,
                 props.context_window_used_tokens,
             );
-            let mut line = Line::from(context.spans);
-            if props.interaction_mode == InteractionMode::Auto {
+            let mut line = if props.subagents_running_count > 0 {
+                let mut line = Line::from(vec![
+                    "Subagents ".dim(),
+                    props.subagents_running_count.to_string().blue(),
+                    " · ".dim(),
+                ]);
+                line.extend(context.spans);
+                line
+            } else {
+                Line::from(context.spans)
+            };
+            if props.interaction_mode == InteractionMode::Auto && props.subagents_running_count == 0
+            {
                 line.push_span(" · ".dim());
                 line.push_span(mode_badge(props.interaction_mode));
             }
@@ -505,6 +530,7 @@ mod tests {
                 interaction_mode: InteractionMode::Normal,
                 context_window_percent: None,
                 context_window_used_tokens: None,
+                subagents_running_count: 0,
             },
         );
 
@@ -518,6 +544,7 @@ mod tests {
                 interaction_mode: InteractionMode::Normal,
                 context_window_percent: None,
                 context_window_used_tokens: None,
+                subagents_running_count: 0,
             },
         );
 
@@ -531,6 +558,7 @@ mod tests {
                 interaction_mode: InteractionMode::Normal,
                 context_window_percent: None,
                 context_window_used_tokens: None,
+                subagents_running_count: 0,
             },
         );
 
@@ -544,6 +572,7 @@ mod tests {
                 interaction_mode: InteractionMode::Normal,
                 context_window_percent: None,
                 context_window_used_tokens: None,
+                subagents_running_count: 0,
             },
         );
 
@@ -557,6 +586,7 @@ mod tests {
                 interaction_mode: InteractionMode::Normal,
                 context_window_percent: None,
                 context_window_used_tokens: None,
+                subagents_running_count: 0,
             },
         );
 
@@ -570,6 +600,7 @@ mod tests {
                 interaction_mode: InteractionMode::Normal,
                 context_window_percent: None,
                 context_window_used_tokens: None,
+                subagents_running_count: 0,
             },
         );
 
@@ -583,6 +614,7 @@ mod tests {
                 interaction_mode: InteractionMode::Normal,
                 context_window_percent: Some(72),
                 context_window_used_tokens: None,
+                subagents_running_count: 0,
             },
         );
 
@@ -596,6 +628,7 @@ mod tests {
                 interaction_mode: InteractionMode::Normal,
                 context_window_percent: None,
                 context_window_used_tokens: Some(123_456),
+                subagents_running_count: 0,
             },
         );
     }
@@ -610,6 +643,7 @@ mod tests {
             interaction_mode: InteractionMode::Plan,
             context_window_percent: None,
             context_window_used_tokens: None,
+            subagents_running_count: 0,
         };
         let lines = footer_lines(&props);
         assert_eq!(lines.len(), 1);

@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 use crate::AuthManager;
 use crate::RolloutRecorder;
@@ -28,4 +29,5 @@ pub(crate) struct SessionServices {
     pub(crate) tool_approvals: Mutex<ApprovalStore>,
     pub(crate) skills_manager: Arc<SkillsManager>,
     pub(crate) subagents: SubAgentsManager,
+    pub(crate) subagents_background_mode: AtomicBool,
 }

@@ -146,7 +146,7 @@ use strum::IntoEnumIterator;
 
 const USER_SHELL_COMMAND_HELP_TITLE: &str = "Prefix a command with ! to run it locally";
 const USER_SHELL_COMMAND_HELP_HINT: &str = "Example: !ls";
-const SUBAGENTS_BACKGROUND_MODE_PROMPT: &str = "UI preference: if you use the `subagents` tool, run sub-agents in the background. Spawn them and return control to the user without waiting. While sub-agents are running, do not surface their messages into the main chat (progress appears in the sub-agent tree); only fetch/show detailed outputs when the user explicitly asks.";
+const SUBAGENTS_BACKGROUND_MODE_PROMPT: &str = "UI preference: if you use the `subagents` tool, run sub-agents in the background. Do not block the main conversation waiting for them. Do not poll them for status and do not print their progress in the main chat (progress appears in the sub-agent tree). Continue the normal conversation. Do not announce when they finish unless the user explicitly asks for results.";
 const PLAN_MODE_ENTRY_PROMPT_PREFIX: &str = r#"<user_instructions>
 Plan Mode entry requested.
 
@@ -397,7 +397,8 @@ pub(crate) struct ChatWidget {
     subagents_update: Option<codex_core::protocol::SubAgentsUpdateEvent>,
     subagents_transcripts_open: bool,
     subagents_background_mode: bool,
-    subagents_background_abort_pending: bool,
+    subagents_were_running: bool,
+    pending_subagents_completion: Option<String>,
 }
 
 struct UserMessage {
@@ -628,6 +629,7 @@ impl ChatWidget {
         self.suppressed_exec_calls.clear();
         self.last_unified_wait = None;
         self.request_redraw();
+        self.maybe_flush_pending_subagents_completion();
 
         // If Plan mode produced decision points, collect answers before sending any queued input.
         let showed_plan_questions = self.maybe_show_plan_questions(last_agent_message.as_deref());
@@ -776,6 +778,7 @@ impl ChatWidget {
         self.finalize_turn();
         self.add_to_history(history_cell::new_error_event(message));
         self.request_redraw();
+        self.maybe_flush_pending_subagents_completion();
 
         // After an error ends the turn, try sending the next queued input.
         self.maybe_send_next_queued_input();
@@ -850,6 +853,7 @@ impl ChatWidget {
 
         self.mcp_startup_status = None;
         self.bottom_pane.set_task_running(false);
+        self.maybe_flush_pending_subagents_completion();
         self.maybe_send_next_queued_input();
         self.request_redraw();
     }
@@ -858,24 +862,13 @@ impl ChatWidget {
     /// When there are queued user messages, restore them into the composer
     /// separated by newlines rather than auto‑submitting the next one.
     fn on_interrupted_turn(&mut self, reason: TurnAbortReason) {
-        let is_background_abort = self.subagents_background_abort_pending
-            && reason == TurnAbortReason::Interrupted
-            && self.subagents_background_mode;
-        self.subagents_background_abort_pending = false;
-
         // Finalize, log a gentle prompt, and clear running state.
         self.finalize_turn();
 
-        if !is_background_abort && reason != TurnAbortReason::ReviewEnded {
+        if reason != TurnAbortReason::ReviewEnded {
             self.add_to_history(history_cell::new_error_event(
                 "Conversation interrupted - tell the model what to do differently. Something went wrong? Hit `/feedback` to report the issue.".to_owned(),
             ));
-        }
-
-        if is_background_abort {
-            self.maybe_send_next_queued_input();
-            self.request_redraw();
-            return;
         }
 
         // If any messages were queued during the task, restore them into the composer.
@@ -901,6 +894,16 @@ impl ChatWidget {
         }
 
         self.request_redraw();
+    }
+
+    fn maybe_flush_pending_subagents_completion(&mut self) {
+        if self.bottom_pane.is_task_running() {
+            return;
+        }
+        let Some(message) = self.pending_subagents_completion.take() else {
+            return;
+        };
+        self.on_agent_message(message);
     }
 
     fn on_plan_update(&mut self, update: UpdatePlanArgs) {
@@ -1447,7 +1450,8 @@ impl ChatWidget {
             subagents_update: None,
             subagents_transcripts_open: false,
             subagents_background_mode: false,
-            subagents_background_abort_pending: false,
+            subagents_were_running: false,
+            pending_subagents_completion: None,
         };
 
         widget.prefetch_rate_limits();
@@ -1536,7 +1540,8 @@ impl ChatWidget {
             subagents_update: None,
             subagents_transcripts_open: false,
             subagents_background_mode: false,
-            subagents_background_abort_pending: false,
+            subagents_were_running: false,
+            pending_subagents_completion: None,
         };
 
         widget.prefetch_rate_limits();
@@ -1560,6 +1565,9 @@ impl ChatWidget {
             } else {
                 "off"
             };
+            self.submit_op(Op::SetSubagentsBackgroundMode {
+                enabled: self.subagents_background_mode,
+            });
             self.add_info_message(
                 format!("Sub-agents background mode: {state}"),
                 Some(
@@ -2167,25 +2175,51 @@ impl ChatWidget {
     }
 
     fn on_subagents_update(&mut self, ev: codex_core::protocol::SubAgentsUpdateEvent) {
+        self.bottom_pane
+            .set_subagents_running_count(ev.running_count);
+
         if ev.running_count == 0 {
+            if self.subagents_were_running {
+                self.subagents_were_running = false;
+                if self.subagents_background_mode {
+                    let done_count = ev.agents.len();
+                    let failed_count = ev
+                        .agents
+                        .iter()
+                        .filter(|agent| {
+                            agent.status == codex_core::protocol::SubAgentStatus::Failed
+                        })
+                        .count();
+                    let mut message = if failed_count == 0 {
+                        format!("Subagents finished ({done_count}).")
+                    } else {
+                        format!("Subagents finished ({done_count}); {failed_count} failed.")
+                    };
+
+                    let titles = ev
+                        .agents
+                        .iter()
+                        .map(|agent| agent.title.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    if !titles.is_empty() {
+                        message.push('\n');
+                        message.push_str(&titles);
+                    }
+
+                    self.pending_subagents_completion = Some(message);
+                    self.maybe_flush_pending_subagents_completion();
+                }
+            }
+
             self.subagents_update = None;
             self.subagents_transcripts_open = false;
         } else {
+            self.subagents_were_running = true;
             self.subagents_update = Some(ev);
         }
 
-        if self.subagents_background_mode
-            && !self.subagents_background_abort_pending
-            && self.bottom_pane.is_task_running()
-            && self
-                .subagents_update
-                .as_ref()
-                .is_some_and(|update| update.running_count > 0)
-        {
-            self.subagents_background_abort_pending = true;
-            self.submit_op(Op::Interrupt);
-        }
-
+        self.maybe_flush_pending_subagents_completion();
         self.request_redraw();
     }
 

@@ -1326,6 +1326,7 @@ mod tests {
             create_read_mcp_resource_tool(),
             PLAN_TOOL.clone(),
             create_apply_patch_freeform_tool(),
+            create_subagents_tool(),
             ToolSpec::WebSearch {},
             create_view_image_tool(),
         ] {
@@ -1371,6 +1372,7 @@ mod tests {
                 "read_mcp_resource",
                 "update_plan",
                 "apply_patch",
+                "subagents",
                 "view_image",
             ],
         );
@@ -1388,6 +1390,7 @@ mod tests {
                 "read_mcp_resource",
                 "update_plan",
                 "apply_patch",
+                "subagents",
                 "view_image",
             ],
         );
@@ -1408,6 +1411,7 @@ mod tests {
                 "read_mcp_resource",
                 "update_plan",
                 "apply_patch",
+                "subagents",
                 "web_search",
                 "view_image",
             ],
@@ -1429,6 +1433,7 @@ mod tests {
                 "read_mcp_resource",
                 "update_plan",
                 "apply_patch",
+                "subagents",
                 "web_search",
                 "view_image",
             ],
@@ -1446,6 +1451,7 @@ mod tests {
                 "list_mcp_resource_templates",
                 "read_mcp_resource",
                 "update_plan",
+                "subagents",
                 "view_image",
             ],
         );
@@ -1463,6 +1469,7 @@ mod tests {
                 "read_mcp_resource",
                 "update_plan",
                 "apply_patch",
+                "subagents",
                 "view_image",
             ],
         );
@@ -1479,6 +1486,7 @@ mod tests {
                 "list_mcp_resource_templates",
                 "read_mcp_resource",
                 "update_plan",
+                "subagents",
                 "view_image",
             ],
         );
@@ -1496,6 +1504,7 @@ mod tests {
                 "read_mcp_resource",
                 "update_plan",
                 "apply_patch",
+                "subagents",
                 "view_image",
             ],
         );
@@ -1514,6 +1523,7 @@ mod tests {
                 "read_mcp_resource",
                 "update_plan",
                 "apply_patch",
+                "subagents",
                 "view_image",
             ],
         );
@@ -1533,6 +1543,7 @@ mod tests {
                 "list_mcp_resource_templates",
                 "read_mcp_resource",
                 "update_plan",
+                "subagents",
                 "web_search",
                 "view_image",
             ],

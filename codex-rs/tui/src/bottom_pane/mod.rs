@@ -421,6 +421,11 @@ impl BottomPane {
         self.request_redraw();
     }
 
+    pub(crate) fn set_subagents_running_count(&mut self, count: usize) {
+        self.composer.set_subagents_running_count(count);
+        self.request_redraw();
+    }
+
     pub(crate) fn composer_is_empty(&self) -> bool {
         self.composer.is_empty()
     }

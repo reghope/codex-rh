@@ -121,6 +121,7 @@ pub(crate) struct ChatComposer {
     interaction_mode: InteractionMode,
     context_window_percent: Option<i64>,
     context_window_used_tokens: Option<i64>,
+    subagents_running_count: usize,
     skills: Option<Vec<SkillMetadata>>,
     dismissed_skill_popup_token: Option<String>,
 }
@@ -170,6 +171,7 @@ impl ChatComposer {
             interaction_mode: InteractionMode::Normal,
             context_window_percent: None,
             context_window_used_tokens: None,
+            subagents_running_count: 0,
             skills: None,
             dismissed_skill_popup_token: None,
         };
@@ -1579,7 +1581,12 @@ impl ChatComposer {
             interaction_mode: self.interaction_mode,
             context_window_percent: self.context_window_percent,
             context_window_used_tokens: self.context_window_used_tokens,
+            subagents_running_count: self.subagents_running_count,
         }
+    }
+
+    pub(crate) fn set_subagents_running_count(&mut self, count: usize) {
+        self.subagents_running_count = count;
     }
 
     fn footer_mode(&self) -> FooterMode {

@@ -448,7 +448,8 @@ fn make_chatwidget_manual(
         subagents_update: None,
         subagents_transcripts_open: false,
         subagents_background_mode: false,
-        subagents_background_abort_pending: false,
+        subagents_were_running: false,
+        pending_subagents_completion: None,
     };
     (widget, rx, op_rx)
 }

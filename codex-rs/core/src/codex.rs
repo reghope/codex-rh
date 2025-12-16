@@ -684,6 +684,7 @@ impl Session {
             tool_approvals: Mutex::new(ApprovalStore::default()),
             skills_manager,
             subagents: crate::subagents::SubAgentsManager::default(),
+            subagents_background_mode: AtomicBool::new(false),
         };
 
         let sess = Arc::new(Session {
@@ -1638,6 +1639,11 @@ async fn submission_loop(sess: Arc<Session>, config: Arc<Config>, rx_sub: Receiv
             }
             Op::Review { review_request } => {
                 handlers::review(&sess, &config, sub.id.clone(), review_request).await;
+            }
+            Op::SetSubagentsBackgroundMode { enabled } => {
+                sess.services
+                    .subagents_background_mode
+                    .store(enabled, Ordering::Relaxed);
             }
             _ => {} // Ignore unknown ops; enum is non_exhaustive to allow extensions.
         }
@@ -3110,6 +3116,7 @@ mod tests {
             tool_approvals: Mutex::new(ApprovalStore::default()),
             skills_manager,
             subagents: crate::subagents::SubAgentsManager::default(),
+            subagents_background_mode: AtomicBool::new(false),
         };
 
         let turn_context = Session::make_turn_context(
@@ -3203,6 +3210,7 @@ mod tests {
             tool_approvals: Mutex::new(ApprovalStore::default()),
             skills_manager,
             subagents: crate::subagents::SubAgentsManager::default(),
+            subagents_background_mode: AtomicBool::new(false),
         };
 
         let turn_context = Arc::new(Session::make_turn_context(

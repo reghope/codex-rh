@@ -12,6 +12,7 @@ use crate::tools::context::ToolOutput;
 use crate::tools::context::ToolPayload;
 use crate::tools::registry::ToolHandler;
 use crate::tools::registry::ToolKind;
+use std::sync::atomic::Ordering;
 
 pub struct SubAgentsHandler;
 
@@ -159,6 +160,15 @@ impl ToolHandler for SubAgentsHandler {
                 id,
                 include_messages,
             } => {
+                if session
+                    .services
+                    .subagents_background_mode
+                    .load(Ordering::Relaxed)
+                {
+                    return Err(FunctionCallError::RespondToModel(
+                        "subagents polling is disabled while background mode is enabled; continue the conversation and rely on the UI sub-agent tree for progress".to_string(),
+                    ));
+                }
                 let Some(poll) = session.services.subagents.poll(&id, include_messages).await
                 else {
                     return Err(FunctionCallError::RespondToModel(format!(

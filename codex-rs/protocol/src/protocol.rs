@@ -225,6 +225,13 @@ pub enum Op {
 
     /// Request the list of available models.
     ListModels,
+
+    /// Toggle whether sub-agents should be treated as background work.
+    ///
+    /// When enabled, UIs may surface sub-agent progress in a dedicated pane and
+    /// the `subagents` tool may restrict polling to avoid blocking the main
+    /// conversation turn.
+    SetSubagentsBackgroundMode { enabled: bool },
 }
 
 /// Determines the conditions under which the user is consulted to approve
